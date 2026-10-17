@@ -1,0 +1,77 @@
+# Atelier vidéo Nina Architecture : film de visite d'une maison, commandé par archi.nina-services.com.
+# Déclenché par l'API GitHub (workflow_dispatch). Résultat : une release « maison-<id> » avec le MP4, puis retour au site.
+name: Film de visite Nina Architecture
+
+on:
+  workflow_dispatch:
+    inputs:
+      id: { description: "Identifiant de la vidéo", required: true }
+      source: { description: "Adresse du scénario (plan de la maison)", required: true }
+      rappel: { description: "Adresse de retour", required: true }
+      jeton: { description: "Jeton de retour (propre à cette vidéo)", required: true }
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rendu-maison
+  cancel-in-progress: false
+
+jobs:
+  rendu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      ID: ${{ inputs.id }}
+      SOURCE: ${{ inputs.source }}
+      RAPPEL: ${{ inputs.rappel }}
+      JETON: ${{ inputs.jeton }}
+    steps:
+      - name: Contrôles
+        run: |
+          echo "::add-mask::$JETON"
+          [[ "$ID" =~ ^m[a-f0-9]{16}-[0-9]{1,3}$ ]] || { echo "Identifiant invalide"; exit 1; }
+          [[ "$SOURCE" =~ ^https://archi\.nina-services\.com/api/video-plan/[a-f0-9]{16}\?jeton=[a-f0-9]{32}$ ]] || { echo "Source invalide"; exit 1; }
+          [[ "$RAPPEL" =~ ^https://archi\.nina-services\.com/api/video-retour/[a-f0-9]{16}$ ]] || { echo "Adresse de retour invalide"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Polices
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-core
+
+      - name: Outils (navigateur invisible, ffmpeg)
+        working-directory: pub
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+
+      - name: Scénario (plan de la maison)
+        working-directory: pub
+        run: |
+          mkdir -p scenarios
+          curl -sf "$SOURCE" -o "scenarios/$ID.json"
+
+      - name: Rendu (3D image par image + musique + MP4)
+        working-directory: pub
+        run: node rendu-maison.mjs "scenarios/$ID.json"
+
+      - name: Mise en ligne de la vidéo
+        working-directory: pub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "maison-$ID" "videos/$ID.mp4" --title "Film de visite $ID" --notes "Film de visite généré automatiquement par Nina Architecture (maquette indicative)."
+
+      - name: Prévenir le site (vidéo prête)
+        if: success()
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/maison-$ID/$ID.mp4"
+          curl -sf -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"url\":\"$URL\"}"
+
+      - name: Prévenir le site (échec)
+        if: failure()
+        run: |
+          curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"rendu échoué (exécution $GITHUB_RUN_ID)\"}"
