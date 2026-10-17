@@ -70,4 +70,5 @@ jobs:
 
       - name: Prévenir les agents (échec)
         if: failure()
-        run: curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"rendu échoué (exécution $GITHUB_RUN_ID)\"}"
+        run: |
+          curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"rendu échoué (exécution $GITHUB_RUN_ID)\"}"
