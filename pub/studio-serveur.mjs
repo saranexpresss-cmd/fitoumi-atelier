@@ -37,6 +37,7 @@ http.createServer(async (req, res) => {
   if (req.method === "POST" && u.pathname === "/audio" && idValide(video)) {
     const morceaux = [];
     for await (const m of req) morceaux.push(m);
+    fs.mkdirSync(path.join(ici, "sortie"), { recursive: true });
     fs.writeFileSync(path.join(ici, "sortie", `${video}.wav`), Buffer.concat(morceaux));
     return res.end("ok");
   }
