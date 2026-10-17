@@ -1,0 +1,10 @@
+{
+  "name": "fitoumi-atelier-video",
+  "private": true,
+  "type": "module",
+  "description": "Atelier de rendu des vidéos Fitoumi (agent Vidéaste)",
+  "dependencies": {
+    "ffmpeg-static": "5.2.0",
+    "playwright-core": "1.56.1"
+  }
+}

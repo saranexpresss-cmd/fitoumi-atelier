@@ -1,0 +1,13 @@
+﻿{
+  "id": "essai-exercice",
+  "duree": 30,
+  "graine": 5,
+  "scenes": [
+    { "type": "accroche", "de": 0, "a": 4, "lignes": [{ "texte": "10 MINUTES" }, { "texte": "PAR JOUR", "couleur": "jaune" }], "chute": [{ "texte": "ÇA SUFFIT.", "couleur": "vert" }] },
+    { "type": "coach", "de": 4, "a": 10, "mvt": "squat", "sexe": "f", "titre": "LE SQUAT PARFAIT", "compteur": true, "angle": [25, -10] },
+    { "type": "liste", "de": 10, "a": 18, "mvt": "squat", "sexe": "f", "titre": "3 ERREURS À ÉVITER", "points": ["Genoux qui rentrent", "Dos arrondi", "Talons qui décollent"] },
+    { "type": "telephone_reps", "de": 18, "a": 23, "mvt": "squat", "sexe": "h", "titre1": "TON COACH", "titre2": "COMPTE POUR TOI 📸" },
+    { "type": "montage", "de": 23, "a": 26, "mots": ["MAISON", "SANS MATÉRIEL", "GRATUIT"], "mouvements": [["squat_saute", "h"], ["fentes", "f"], ["jumping_jacks", "h"]] },
+    { "type": "fin", "de": 26, "a": 30 }
+  ]
+}

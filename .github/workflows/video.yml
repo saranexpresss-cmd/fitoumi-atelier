@@ -1,0 +1,73 @@
+# Atelier vidéo Fitoumi : rendu d'une vidéo commandée par l'agent Vidéaste (fitoumi-agents sur Cloudflare).
+# Déclenché par l'API GitHub (workflow_dispatch). Résultat : une release « video-<id> » avec le MP4, puis retour aux agents.
+name: Rendu vidéo Fitoumi
+
+on:
+  workflow_dispatch:
+    inputs:
+      id: { description: "Identifiant de la vidéo", required: true }
+      scenario: { description: "Scénario JSON", required: true }
+      rappel: { description: "Adresse de retour des agents", required: true }
+      jeton: { description: "Jeton de retour (propre à cette vidéo)", required: true }
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rendu-video
+  cancel-in-progress: false
+
+jobs:
+  rendu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      ID: ${{ inputs.id }}
+      SCENARIO: ${{ inputs.scenario }}
+      RAPPEL: ${{ inputs.rappel }}
+      JETON: ${{ inputs.jeton }}
+    steps:
+      - name: Contrôles
+        run: |
+          echo "::add-mask::$JETON"
+          [[ "$ID" =~ ^v[0-9]{1,8}$ ]] || { echo "Identifiant invalide"; exit 1; }
+          [[ "$RAPPEL" =~ ^https://fitoumi-agents\.fitoumi\.workers\.dev/video/[0-9]+$ ]] || { echo "Adresse de retour invalide"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Polices (texte et émojis)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-core fonts-noto-color-emoji
+
+      - name: Outils (navigateur invisible, ffmpeg)
+        working-directory: pub
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+
+      - name: Scénario
+        working-directory: pub
+        run: mkdir -p scenarios && printf '%s' "$SCENARIO" > "scenarios/$ID.json"
+
+      - name: Rendu (3D image par image + musique + MP4)
+        working-directory: pub
+        run: node rendu.mjs "scenarios/$ID.json"
+
+      - name: Mise en ligne de la vidéo
+        working-directory: pub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "video-$ID" "videos/$ID.mp4" --title "Vidéo $ID" --notes "Vidéo générée par l'agent Vidéaste de Fitoumi (sans voix, musique originale)."
+
+      - name: Prévenir les agents (vidéo prête)
+        if: success()
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/video-$ID/$ID.mp4"
+          curl -sf -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"url\":\"$URL\"}"
+
+      - name: Prévenir les agents (échec)
+        if: failure()
+        run: curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"rendu échoué (exécution $GITHUB_RUN_ID)\"}"

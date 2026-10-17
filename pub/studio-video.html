@@ -1,0 +1,20 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Studio vidéo Fitoumi</title>
+  <style>
+    body { margin: 0; background: #000; color: #eef2ff; font: 14px system-ui, sans-serif; }
+    #ecran { display: block; height: 92vh; width: auto; margin: 8px auto; border-radius: 12px; }
+    #etat { text-align: center; color: #8a93a8; }
+    #scene3d { position: fixed; left: -3000px; top: 0; width: 1080px; height: 1300px; }
+  </style>
+</head>
+<body>
+  <canvas id="ecran" width="1080" height="1920"></canvas>
+  <p id="etat">Chargement…</p>
+  <div id="scene3d"></div>
+  <script type="module" src="studio-video.js"></script>
+</body>
+</html>
+
