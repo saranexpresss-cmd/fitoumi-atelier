@@ -251,7 +251,9 @@ const SCENES = {
     bloc(sc.sous || "Ton coach sportif dans ta poche", 540, 900, { t, de: sc.de + 0.9, taille: 44, fond: "rgba(255,255,255,0.12)", couleur: "#fff" });
     bloc("100 % GRATUIT", 540, 1040, { t, de: sc.de + 1.3, taille: 64, fond: VERT, rot: -0.02 });
     bloc("Android & iPhone", 540, 1150, { t, de: sc.de + 1.6, taille: 44 });
-    if (t > sc.de + 2) { const pulse = 1 + 0.05 * Math.sin(t * 9); g.save(); g.translate(540, 1330); g.scale(pulse, pulse); g.translate(-540, -1330); bloc("fitoumi.com 👉 lien en bio", 540, 1330, { t, de: sc.de + 2, taille: 56, fond: JAUNE, rot: 0.02 }); g.restore(); }
+    const abonne = /ABONNE/i.test(sc.appel || "");
+    if (t > sc.de + 2) { const pulse = 1 + 0.05 * Math.sin(t * 9); g.save(); g.translate(540, 1330); g.scale(pulse, pulse); g.translate(-540, -1330); bloc(abonne ? "🔔 Abonne-toi : 1 conseil / jour" : "fitoumi.com 👉 lien en bio", 540, 1330, { t, de: sc.de + 2, taille: 56, fond: JAUNE, rot: 0.02 }); g.restore(); }
+    if (abonne && t > sc.de + 2.4) bloc("Appli gratuite : fitoumi.com", 540, 1450, { t, de: sc.de + 2.4, taille: 40, fond: "rgba(255,255,255,0.12)", couleur: "#fff" });
   },
 };
 
