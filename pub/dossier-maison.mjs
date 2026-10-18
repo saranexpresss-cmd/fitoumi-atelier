@@ -48,6 +48,32 @@ const STYLE = `<style>
 </style>`;
 const tete = (titre) => `<div class="tete"><b><img src="https://bureau.nina-services.com/marque/nina-services-icone-180.png" style="width:26px;height:26px;border-radius:6px;vertical-align:-6px;margin-right:8px" alt="">NINA ARCHITECTURE</b><span>${esc(titre)}<br>${esc(S.titre)} · ${esc(S.lieu)} · ${date}</span></div>`;
 const blocPlan = `${tete("Plan du rez-de-chaussée")}<div class="plan">${S.svg}</div>`;
+// Fiche technique : tableau des surfaces, nomenclature des menuiseries, caractéristiques et points de vigilance
+const P = S.plan || {}, f2 = (v) => Number(v || 0).toFixed(2).replace(".", ",");
+const SOLS = { douche: "Carrelage antidérapant", sdb: "Carrelage antidérapant", wc: "Carrelage", cuisine: "Carrelage", buanderie: "Carrelage", chambre: "Parquet ou carrelage", bureau: "Parquet ou carrelage", salon: "Carrelage grand format", couloir: "Carrelage" };
+const pieces = (P.pieces || []).slice().sort((a, b) => (a.type === "couloir") - (b.type === "couloir"));
+const ouv = P.ouvertures || [], grouper = (l) => Object.values(l.reduce((m, o) => { const k = `${o.type}|${o.largeur}|${o.hauteur || ""}|${o.allege || ""}`; (m[k] = m[k] || { ...o, n: 0 }).n++; return m; }, {}));
+const NOMS_OUV = { entree: "Porte d'entrée", porte: "Porte intérieure", passage: "Passage libre", fenetre: "Fenêtre", baie: "Baie vitrée coulissante" };
+const blocTechnique = `${tete("Fiche technique")}<h1>Fiche technique du plan</h1>
+  <p class="doux">${esc(S.titre)} · ${esc(S.lieu)} · surface des pièces ${f2(P.habitable)} m² · emprise au sol ${f2(P.emprise)} m²${P.terrasse ? ` · terrasse couverte ${f2(P.terrasse.surface)} m²` : ""}</p>
+  <h2>1. Tableau des surfaces</h2>
+  <table><thead><tr><th>Pièce</th><th class="m">Dimensions (m)</th><th class="m">Surface (m²)</th><th>Revêtement de sol conseillé</th></tr></thead><tbody>
+  ${pieces.map((q) => `<tr><td>${esc(q.nom)}</td><td class="m">${f2(q.w)} × ${f2(q.h)}</td><td class="m">${f2(q.surface)}</td><td>${SOLS[q.type] || "Carrelage"}</td></tr>`).join("")}
+  <tr class="total"><td>Total des pièces</td><td></td><td class="m">${f2(P.habitable)}</td><td></td></tr></tbody></table>
+  <h2>2. Nomenclature des menuiseries</h2>
+  <table><thead><tr><th>Type</th><th class="m">Quantité</th><th class="m">Largeur (m)</th><th class="m">Hauteur (m)</th><th class="m">Allège (m)</th></tr></thead><tbody>
+  ${grouper(ouv).sort((a, b) => a.type.localeCompare(b.type)).map((o) => `<tr><td>${NOMS_OUV[o.type] || o.type}</td><td class="m">${o.n}</td><td class="m">${f2(o.largeur)}</td><td class="m">${o.type === "fenetre" ? f2(o.hauteur || 1.2) : o.type === "baie" ? "2,30" : o.type === "passage" ? "—" : "2,15"}</td><td class="m">${o.type === "fenetre" ? f2(o.allege || 1) : "—"}</td></tr>`).join("")}</tbody></table>
+  <h2>3. Caractéristiques de construction (hypothèses de l'esquisse)</h2>
+  <ul><li>Murs extérieurs : 20 cm (agglos ou briques, enduit deux faces) · cloisons intérieures : 15 cm</li>
+  <li>Hauteur sous plafond : ${f2((P.hauteur || 3) - 0.2)} m · dalle ou charpente selon la toiture retenue</li>
+  <li>Dimensions hors tout de la maison : ${f2(P.largeur)} m × ${f2(P.profondeur)} m${P.terrasse ? `, plus terrasse de ${f2(P.terrasse.w)} × ${f2(P.terrasse.h)} m en façade` : ""}</li>
+  <li>Ventilation : ouvertures sur deux façades opposées dans les pièces de vie quand c'est possible</li></ul>
+  <h2>4. À vérifier avant de construire</h2>
+  <ul><li>Implantation exacte sur le terrain et limites de la parcelle : par un géomètre</li>
+  <li>Nature du sol et fondations : étude de sol recommandée, dimensionnement par un bureau d'études</li>
+  <li>Règles d'urbanisme locales (reculs, hauteur, emprise) et permis de construire : dossier à faire établir ou viser par un architecte agréé quand la loi l'exige</li>
+  <li>Réseaux : eau, électricité, assainissement (fosse septique ou raccordement)</li></ul>
+  <p class="note">Les cotes sont en mètres et à vérifier sur le terrain avant toute exécution. Document établi à partir de l'esquisse Nina Architecture.</p>`;
 const d = S.devis;
 const blocDevis = d ? `${tete("Devis estimatif détaillé")}<h1>Devis estimatif · ${esc(d.standing_nom)}</h1>
   <p class="doux">${esc(S.lieu)} · ${esc(d.description)} · montants en ${esc(d.devise)}</p>
@@ -74,6 +100,7 @@ const pdf = async (nom, corps, paysage = false) => {
   console.log(`✅ ${nom}`);
 };
 await pdf("plan-cote.pdf", blocPlan, true);
+await pdf("fiche-technique.pdf", blocTechnique + mentions);
 if (d) await pdf("devis-detaille.pdf", blocDevis);
 if (blocConcept) await pdf("concept-innovations.pdf", blocConcept);
 // Facture de chaque commande payée
@@ -93,7 +120,7 @@ if (S.pack === "premium") {
   const images = photos.map((p) => `<img class="photo" src="${p.data}">`);
   await pdf("dossier-complet.pdf", `<div class="couverture"><p class="doux">NINA ARCHITECTURE · DOSSIER DE PRÉSENTATION</p><h1>${esc(S.titre)}</h1><p style="font-size:14pt">${esc(S.lieu)}</p>${images[0] || ""}<p class="doux">${date} · esquisse non contractuelle, à faire valider et signer par un architecte agréé pour le permis de construire.</p></div>
     <div class="saut">${tete("Perspectives 3D")}<div class="grille">${images.slice(1).join("")}</div></div>
-    ${blocConcept ? `<div class="saut">${blocConcept}</div>` : ""}<div class="saut">${blocPlan}</div><div class="saut">${blocDevis}</div>`);
+    ${blocConcept ? `<div class="saut">${blocConcept}</div>` : ""}<div class="saut">${blocPlan}</div><div class="saut">${blocTechnique}</div><div class="saut">${blocDevis}</div>`);
 }
 await navigateur.close();
 process.exit(0);
