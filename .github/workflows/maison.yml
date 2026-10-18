@@ -1,17 +1,18 @@
-# Atelier vidéo Nina Architecture : film de visite d'une maison, commandé par archi.nina-services.com.
-# Déclenché par l'API GitHub (workflow_dispatch). Résultat : une release « maison-<id> » avec le MP4, puis retour au site.
-name: Film de visite Nina Architecture
+# Atelier Nina Architecture : production du dossier PAYÉ d'un client (PDF, images 3D HD, film de visite).
+# Déclenché par l'API GitHub (workflow_dispatch) après paiement. Les fichiers sont déposés directement dans le stockage privé
+# de Nina Architecture (jamais publiés ici), puis le site prévient le client.
+name: Dossier client Nina Architecture
 
 on:
   workflow_dispatch:
     inputs:
-      id: { description: "Identifiant de la vidéo", required: true }
+      id: { description: "Identifiant de la production", required: true }
       source: { description: "Adresse du scénario (plan de la maison)", required: true }
       rappel: { description: "Adresse de retour", required: true }
-      jeton: { description: "Jeton de retour (propre à cette vidéo)", required: true }
+      jeton: { description: "Jeton de retour (propre à cette production)", required: true }
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: rendu-maison
@@ -30,9 +31,11 @@ jobs:
       - name: Contrôles
         run: |
           echo "::add-mask::$JETON"
+          echo "::add-mask::$SOURCE"
           [[ "$ID" =~ ^m[a-f0-9]{16}-[0-9]{1,3}$ ]] || { echo "Identifiant invalide"; exit 1; }
           [[ "$SOURCE" =~ ^https://archi\.nina-services\.com/api/video-plan/[a-f0-9]{16}\?jeton=[a-f0-9]{32}$ ]] || { echo "Source invalide"; exit 1; }
           [[ "$RAPPEL" =~ ^https://archi\.nina-services\.com/api/video-retour/[a-f0-9]{16}$ ]] || { echo "Adresse de retour invalide"; exit 1; }
+          [[ "$JETON" =~ ^[a-f0-9]{32}$ ]] || { echo "Jeton invalide"; exit 1; }
 
       - uses: actions/checkout@v4
 
@@ -52,26 +55,37 @@ jobs:
       - name: Scénario (plan de la maison)
         working-directory: pub
         run: |
-          mkdir -p scenarios
+          mkdir -p scenarios livraison
           curl -sf "$SOURCE" -o "scenarios/$ID.json"
+          echo "PACK=$(node -p "require('./scenarios/$ID.json').pack || 'plan'")" >> "$GITHUB_ENV"
 
-      - name: Rendu (3D image par image + musique + MP4)
+      - name: Plan coté, devis et images 3D
         working-directory: pub
-        run: node rendu-maison.mjs "scenarios/$ID.json"
+        run: node dossier-maison.mjs "scenarios/$ID.json"
 
-      - name: Mise en ligne de la vidéo
+      - name: Film de visite (Pack 3D et Premium)
+        if: env.PACK != 'plan'
         working-directory: pub
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "maison-$ID" "videos/$ID.mp4" --title "Film de visite $ID" --notes "Film de visite généré automatiquement par Nina Architecture (maquette indicative)."
-
-      - name: Prévenir le site (vidéo prête)
-        if: success()
         run: |
-          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/maison-$ID/$ID.mp4"
-          curl -sf -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"url\":\"$URL\"}"
+          node rendu-maison.mjs "scenarios/$ID.json"
+          FF=$(node -p "require('ffmpeg-static')")
+          TAILLE=$(stat -c %s "videos/$ID.mp4")
+          if [ "$TAILLE" -gt 22000000 ]; then "$FF" -y -loglevel error -i "videos/$ID.mp4" -c:v libx264 -preset medium -crf 26 -c:a aac -b:a 128k -movflags +faststart livraison/film-visite.mp4; else cp "videos/$ID.mp4" livraison/film-visite.mp4; fi
+          ls -l livraison
+
+      - name: Dépôt privé des fichiers
+        working-directory: pub
+        run: |
+          PID="${ID:1:16}"
+          for f in livraison/*; do
+            curl -sf -X POST "https://archi.nina-services.com/api/livraison/$PID?fichier=$(basename "$f")" -H "x-jeton: $JETON" -H "Content-Type: application/octet-stream" --data-binary @"$f" > /dev/null || { echo "Dépôt impossible : $f"; exit 1; }
+            echo "déposé : $(basename "$f")"
+          done
+
+      - name: Prévenir le site (dossier prêt)
+        if: success()
+        run: curl -sf -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"ok\":true}"
 
       - name: Prévenir le site (échec)
         if: failure()
-        run: |
-          curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"rendu échoué (exécution $GITHUB_RUN_ID)\"}"
+        run: curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"production échouée (exécution $GITHUB_RUN_ID)\"}"
