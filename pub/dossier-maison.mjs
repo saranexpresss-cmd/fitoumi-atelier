@@ -46,7 +46,7 @@ const STYLE = `<style>
   .photo { width: 100%; border-radius: 4px; margin: 6px 0; } .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .couverture { height: 260mm; display: flex; flex-direction: column; justify-content: center; } .couverture h1 { font-size: 34pt; }
 </style>`;
-const tete = (titre) => `<div class="tete"><b>NINA ARCHITECTURE</b><span>${esc(titre)}<br>${esc(S.titre)} · ${esc(S.lieu)} · ${date}</span></div>`;
+const tete = (titre) => `<div class="tete"><b><img src="https://bureau.nina-services.com/marque/nina-services-icone-180.png" style="width:26px;height:26px;border-radius:6px;vertical-align:-6px;margin-right:8px" alt="">NINA ARCHITECTURE</b><span>${esc(titre)}<br>${esc(S.titre)} · ${esc(S.lieu)} · ${date}</span></div>`;
 const blocPlan = `${tete("Plan du rez-de-chaussée")}<div class="plan">${S.svg}</div>`;
 const d = S.devis;
 const blocDevis = d ? `${tete("Devis estimatif détaillé")}<h1>Devis estimatif · ${esc(d.standing_nom)}</h1>
@@ -86,6 +86,7 @@ for (const k of S.commandes || []) {
       <tr><td>${esc(k.nom || k.offre)} : conception d'esquisse architecturale et dossier numérique (plan coté, devis estimatif${k.offre !== "plan" ? ", images 3D, film de visite" : ""})</td><td class="m">${fcfa(k.prix || k.montant)}</td></tr>
       ${k.remise ? `<tr><td>Remise commerciale (${k.remise} %)</td><td class="m">− ${fcfa((k.prix || k.montant) - k.montant)}</td></tr>` : ""}
       <tr class="total"><td>Net payé</td><td class="m">${fcfa(k.montant)}</td></tr></tbody></table>
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:18px;margin-top:26px"><div style="text-align:right;font-size:10pt">Fait à Daloa, le ${new Date(k.payee || Date.now()).toLocaleDateString("fr-FR")}<br><b>Nina Services</b></div><img src="https://bureau.nina-services.com/marque/cachet.png" style="width:118px;height:118px;opacity:.9" alt="Cachet Nina Services"></div>
     <p class="note">Esquisse indicative non contractuelle : le dossier de permis de construire doit être établi ou visé par un architecte agréé lorsque la loi l'exige.</p>${mentions}`);
 }
 if (S.pack === "premium") {
