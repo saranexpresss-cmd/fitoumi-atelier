@@ -58,7 +58,16 @@ const blocDevis = d ? `${tete("Devis estimatif détaillé")}<h1>Devis estimatif 
   ${d.options?.length ? `<h2>Options (non comprises dans le total)</h2><table><tbody>${d.options.map((l) => `<tr><td>${esc(l.poste)}</td><td class="m">${montant(l.montant)}</td></tr>`).join("")}</tbody></table>` : ""}
   <h2>Quantités repères</h2><table><tbody>${Object.entries(d.quantites || {}).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="m">${esc(v)}</td></tr>`).join("")}</tbody></table>
   <h2>Hypothèses de calcul</h2><ul>${(d.hypotheses || []).map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
-  <p class="note">Devis estimatif et non contractuel, établi à partir de prix de référence du pays du terrain. Les prix réels dépendent du sol, de la région, des entreprises et des matériaux : demandez plusieurs devis d'entreprises. ${esc(d.architecte || "")}</p>` : "";
+  <p class="note">Devis estimatif et non contractuel, établi à partir de prix de référence du pays du terrain. Les prix réels dépendent du sol, de la région, des entreprises et des matériaux : demandez plusieurs devis d'entreprises. ${esc(d.architecte || "")}</p>${mentions}` : "";
+// Mentions légales (registre du commerce) en pied des devis et factures
+const E = S.entreprise || {};
+const mentions = `<p class="note" style="border-top:1px solid #E2E8F0;padding-top:6px">${esc(E.nom || "Nina Services")} · ${esc(E.titulaire || "")} · RCCM ${esc(E.rccm || "")}${E.ncc ? ` · NCC ${esc(E.ncc)}` : ""} · ${esc(E.adresse || "")} · ${esc(E.telephone || "")} · ${esc(E.email || "")} · ${esc(E.site || "")}</p>`;
+// Concept et innovations de Yao
+const C = S.concept || {}, COUT = { "économie": "💚 économie", neutre: "⚪ coût neutre", "léger surcoût": "🟡 léger surcoût", "surcoût": "🟠 surcoût" };
+const blocConcept = C.innovations?.length ? `${tete("Concept et innovations")}<h1>${C.concept?.nom ? `Concept « ${esc(C.concept.nom)} »` : "Nos innovations pour votre maison"}</h1>
+  ${C.concept?.idee ? `<p style="font-size:12.5pt;line-height:1.5">${esc(C.concept.idee)}</p>` : ""}
+  ${C.innovations.map((i, n) => `<div style="border-left:4px solid #0EA5E9;padding:6px 12px;margin:12px 0;break-inside:avoid"><h2 style="margin:0 0 4px">${n + 1}. ${esc(i.titre)} <small class="doux" style="font-size:9pt;font-weight:500">${esc(COUT[i.cout] || i.cout)}</small></h2><p style="margin:2px 0">${esc(i.description)}</p><p style="margin:2px 0"><b>Pour vous :</b> ${esc(i.benefice)}</p></div>`).join("")}
+  <p class="note">Propositions de Yao, architecte IA de Nina Architecture, à valider avec un architecte agréé et les entreprises selon le sol, les règles locales et le budget.</p>` : "";
 const pdf = async (nom, corps, paysage = false) => {
   await page.setContent(`<!doctype html><html lang="fr"><head><meta charset="utf-8">${STYLE}</head><body>${corps}</body></html>`, { waitUntil: "load" });
   await page.pdf({ path: path.join(sortie, nom), format: "A4", landscape: paysage, printBackground: true });
@@ -66,11 +75,24 @@ const pdf = async (nom, corps, paysage = false) => {
 };
 await pdf("plan-cote.pdf", blocPlan, true);
 if (d) await pdf("devis-detaille.pdf", blocDevis);
+if (blocConcept) await pdf("concept-innovations.pdf", blocConcept);
+// Facture de chaque commande payée
+for (const k of S.commandes || []) {
+  const fcfa = (n) => `${Math.round(n).toLocaleString("fr-FR").replace(/ /g, " ")} FCFA`;
+  await pdf(`facture-${k.id.toLowerCase()}.pdf`, `<div class="tete"><b>${esc(E.nom || "NINA SERVICES")}</b><span>Nina Architecture<br>${esc(E.adresse || "")}</span></div>
+    <h1>Facture n° ${esc(k.id)}</h1><p class="doux">Date : ${new Date(k.payee || Date.now()).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} · Payée${k.moyen ? ` (${esc(k.moyen)})` : ""}</p>
+    <p><b>Client :</b> ${esc(S.donnees?.nom || "Client")}<br><b>Projet :</b> ${esc(S.titre)} · ${esc(S.lieu)}</p>
+    <table><thead><tr><th>Désignation</th><th class="m">Montant</th></tr></thead><tbody>
+      <tr><td>${esc(k.nom || k.offre)} : conception d'esquisse architecturale et dossier numérique (plan coté, devis estimatif${k.offre !== "plan" ? ", images 3D, film de visite" : ""})</td><td class="m">${fcfa(k.prix || k.montant)}</td></tr>
+      ${k.remise ? `<tr><td>Remise commerciale (${k.remise} %)</td><td class="m">− ${fcfa((k.prix || k.montant) - k.montant)}</td></tr>` : ""}
+      <tr class="total"><td>Net payé</td><td class="m">${fcfa(k.montant)}</td></tr></tbody></table>
+    <p class="note">Esquisse indicative non contractuelle : le dossier de permis de construire doit être établi ou visé par un architecte agréé lorsque la loi l'exige.</p>${mentions}`);
+}
 if (S.pack === "premium") {
   const images = photos.map((p) => `<img class="photo" src="${p.data}">`);
   await pdf("dossier-complet.pdf", `<div class="couverture"><p class="doux">NINA ARCHITECTURE · DOSSIER DE PRÉSENTATION</p><h1>${esc(S.titre)}</h1><p style="font-size:14pt">${esc(S.lieu)}</p>${images[0] || ""}<p class="doux">${date} · esquisse non contractuelle, à faire valider et signer par un architecte agréé pour le permis de construire.</p></div>
     <div class="saut">${tete("Perspectives 3D")}<div class="grille">${images.slice(1).join("")}</div></div>
-    <div class="saut">${blocPlan}</div><div class="saut">${blocDevis}</div>`);
+    ${blocConcept ? `<div class="saut">${blocConcept}</div>` : ""}<div class="saut">${blocPlan}</div><div class="saut">${blocDevis}</div>`);
 }
 await navigateur.close();
 process.exit(0);
