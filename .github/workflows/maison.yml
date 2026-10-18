@@ -84,8 +84,10 @@ jobs:
 
       - name: Prévenir le site (dossier prêt)
         if: success()
-        run: curl -sf -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"ok\":true}"
+        run: |
+          curl -sf -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"ok\":true}"
 
       - name: Prévenir le site (échec)
         if: failure()
-        run: curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"production échouée (exécution $GITHUB_RUN_ID)\"}"
+        run: |
+          curl -s -X POST "$RAPPEL" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"production échouée (exécution $GITHUB_RUN_ID)\"}"
