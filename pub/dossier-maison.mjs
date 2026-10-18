@@ -86,7 +86,7 @@ for (const k of S.commandes || []) {
       <tr><td>${esc(k.nom || k.offre)} : conception d'esquisse architecturale et dossier numérique (plan coté, devis estimatif${k.offre !== "plan" ? ", images 3D, film de visite" : ""})</td><td class="m">${fcfa(k.prix || k.montant)}</td></tr>
       ${k.remise ? `<tr><td>Remise commerciale (${k.remise} %)</td><td class="m">− ${fcfa((k.prix || k.montant) - k.montant)}</td></tr>` : ""}
       <tr class="total"><td>Net payé</td><td class="m">${fcfa(k.montant)}</td></tr></tbody></table>
-    <div style="display:flex;justify-content:flex-end;align-items:center;gap:18px;margin-top:26px"><div style="text-align:right;font-size:10pt">Fait à Daloa, le ${new Date(k.payee || Date.now()).toLocaleDateString("fr-FR")}<br><b>Nina Services</b></div><img src="https://bureau.nina-services.com/marque/cachet.png" style="width:118px;height:118px;opacity:.9" alt="Cachet Nina Services"></div>
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:18px;margin-top:26px"><div style="text-align:right;font-size:10pt">Fait à Daloa, le ${new Date(k.payee || Date.now()).toLocaleDateString("fr-FR")}<br>${E.signature ? `<img src="${E.signature}" style="width:150px;display:block;margin:4px 0 0 auto" alt="">` : ""}<b>Mohamed Bassirou Fofana</b><br>Fondateur, Nina Services</div><img src="https://bureau.nina-services.com/marque/cachet.png" style="width:118px;height:118px;opacity:.9" alt="Cachet Nina Services"></div>
     <p class="note">Esquisse indicative non contractuelle : le dossier de permis de construire doit être établi ou visé par un architecte agréé lorsque la loi l'exige.</p>${mentions}`);
 }
 if (S.pack === "premium") {
