@@ -1,5 +1,5 @@
 // Dossier payé d'un client Nina Architecture, sans écran : node dossier-maison.mjs scenarios/<id>.json
-// Produit dans livraison/ : plan coté (PDF), devis détaillé (PDF) ; pour les packs 3D : 4 images HD ; Premium : dossier de présentation complet.
+// Produit dans livraison/ : plan coté (PDF), fiche technique (PDF), jamais d'estimation du coût de construction ; pour les packs 3D : 4 images HD ; Premium : dossier de présentation complet.
 // (Le film est tourné ensuite par rendu-maison.mjs pour les packs 3D.)
 import path from "node:path";
 import fs from "node:fs";
@@ -93,7 +93,7 @@ const C = S.concept || {}, COUT = { "économie": "💚 économie", neutre: "⚪ 
 const blocConcept = C.innovations?.length ? `${tete("Concept et innovations")}<h1>${C.concept?.nom ? `Concept « ${esc(C.concept.nom)} »` : "Nos innovations pour votre maison"}</h1>
   ${C.concept?.idee ? `<p style="font-size:12.5pt;line-height:1.5">${esc(C.concept.idee)}</p>` : ""}
   ${C.innovations.map((i, n) => `<div style="border-left:4px solid #0EA5E9;padding:6px 12px;margin:12px 0;break-inside:avoid"><h2 style="margin:0 0 4px">${n + 1}. ${esc(i.titre)} <small class="doux" style="font-size:9pt;font-weight:500">${esc(COUT[i.cout] || i.cout)}</small></h2><p style="margin:2px 0">${esc(i.description)}</p><p style="margin:2px 0"><b>Pour vous :</b> ${esc(i.benefice)}</p></div>`).join("")}
-  <p class="note">Propositions de Yao, architecte IA de Nina Architecture, à valider avec un architecte agréé et les entreprises selon le sol, les règles locales et le budget.</p>` : "";
+  <p class="note">Propositions de Yao, architecte IA de Nina Architecture, à valider avec un architecte agréé et les entreprises selon le sol et les règles locales.</p>` : "";
 const pdf = async (nom, corps, paysage = false) => {
   await page.setContent(`<!doctype html><html lang="fr"><head><meta charset="utf-8">${STYLE}</head><body>${corps}</body></html>`, { waitUntil: "load" });
   await page.pdf({ path: path.join(sortie, nom), format: "A4", landscape: paysage, printBackground: true });
@@ -110,7 +110,7 @@ for (const k of S.commandes || []) {
     <h1>Facture n° ${esc(k.id)}</h1><p class="doux">Date : ${new Date(k.payee || Date.now()).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} · Payée${k.moyen ? ` (${esc(k.moyen)})` : ""}</p>
     <p><b>Client :</b> ${esc(S.donnees?.nom || "Client")}<br><b>Projet :</b> ${esc(S.titre)} · ${esc(S.lieu)}</p>
     <table><thead><tr><th>Désignation</th><th class="m">Montant</th></tr></thead><tbody>
-      <tr><td>${esc(k.nom || k.offre)} : conception d'esquisse architecturale et dossier numérique (plan coté, devis estimatif${k.offre !== "plan" ? ", images 3D, film de visite" : ""})</td><td class="m">${fcfa(k.prix || k.montant)}</td></tr>
+      <tr><td>${esc(k.nom || k.offre)} : conception d'esquisse architecturale et dossier numérique (plan coté, fiche technique${k.offre !== "plan" ? ", images 3D, film de visite" : ""})</td><td class="m">${fcfa(k.prix || k.montant)}</td></tr>
       ${k.remise ? `<tr><td>Remise commerciale (${k.remise} %)</td><td class="m">− ${fcfa((k.prix || k.montant) - k.montant)}</td></tr>` : ""}
       <tr class="total"><td>Net payé</td><td class="m">${fcfa(k.montant)}</td></tr></tbody></table>
     <div style="display:flex;justify-content:flex-end;align-items:center;gap:18px;margin-top:26px"><div style="text-align:right;font-size:10pt">Fait à Daloa, le ${new Date(k.payee || Date.now()).toLocaleDateString("fr-FR")}<br>${E.signature ? `<img src="${E.signature}" style="width:150px;display:block;margin:4px 0 0 auto" alt="">` : ""}<b>Mohamed Bassirou Fofana</b><br>Fondateur, Nina Services</div><img src="https://bureau.nina-services.com/marque/cachet.png" style="width:118px;height:118px;opacity:.9" alt="Cachet Nina Services"></div>
