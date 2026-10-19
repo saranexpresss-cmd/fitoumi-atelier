@@ -44,6 +44,7 @@ const STYLE = `<style>
   .note { font-size: 8.5pt; color: #64748B; margin-top: 12px; line-height: 1.4; } .saut { page-break-before: always; break-before: page; }
   .plan svg { width: 100%; height: auto; max-height: 168mm; display: block; } .plan svg + svg { page-break-before: always; break-before: page; margin-top: 8mm; }
   .photo { width: 100%; border-radius: 4px; margin: 6px 0; } .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .planche svg { width: 100%; height: auto; max-height: 150mm; display: block; margin: 0 auto; } .legende { columns: 2; font-size: 9pt; margin: 6px 0; padding-left: 18px; } .legende li { margin: 2px 0; }
   .couverture { height: 260mm; display: flex; flex-direction: column; justify-content: center; } .couverture h1 { font-size: 34pt; }
 </style>`;
 const tete = (titre) => `<div class="tete"><b><img src="https://bureau.nina-services.com/marque/nina-services-icone-180.png" style="width:26px;height:26px;border-radius:6px;vertical-align:-6px;margin-right:8px" alt="">NINA ARCHITECTURE</b><span>${esc(titre)}<br>${esc(S.titre)} · ${esc(S.lieu)} · ${date}</span></div>`;
@@ -99,8 +100,24 @@ const pdf = async (nom, corps, paysage = false) => {
   await page.pdf({ path: path.join(sortie, nom), format: "A4", landscape: paysage, printBackground: true });
   console.log(`✅ ${nom}`);
 };
-await pdf("plan-cote.pdf", blocPlan, true);
-await pdf("fiche-technique.pdf", blocTechnique + mentions);
+await pdf("01-plan-cote.pdf", blocPlan, true);
+await pdf("02-fiche-technique.pdf", blocTechnique + mentions);
+// Planches du dossier (façades, coupe, toiture, structure, électricité, plomberie, plan de masse, menuiseries), calculées par le serveur
+const tableau = (t) => t ? `<table><thead><tr>${t.tetes.map((x) => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${t.lignes.map((l) => `<tr>${l.map((x) => `<td>${esc(x)}</td>`).join("")}</tr>`).join("")}</tbody></table>` : "";
+const legende = (l) => l ? `<ul class="legende">${l.map(([t, s]) => `<li><b>${esc(s)}</b> ${esc(t)}</li>`).join("")}</ul>` : "";
+for (const P of S.planches || []) {
+  const pages = P.pages.map((g, i) => `<div class="${i ? "saut" : ""}">${tete(P.titre)}${g.sous ? `<h2 style="margin-top:0">${esc(g.sous)}</h2>` : ""}<div class="planche">${g.svg}</div>${legende(g.legende)}</div>`).join("");
+  await pdf(P.fichier, `${pages}${P.tableau ? `<div class="saut">${tete(P.titre)}<h2>Récapitulatif</h2>${tableau(P.tableau)}</div>` : ""}${P.note ? `<p class="note">${esc(P.note)}</p>` : ""}${mentions}`, true);
+}
+// Plan de situation : le terrain repéré par le client sur l'imagerie satellite
+if (S.situation?.tuiles) {
+  const t = S.situation;
+  await pdf("12-plan-de-situation.pdf", `${tete("Plan de situation")}<div style="position:relative;width:768px;height:768px;margin:0 auto;overflow:hidden;border:1px solid #0F172A">${t.tuiles.map((u) => `<img src="${u.url}" style="position:absolute;left:${u.x}px;top:${u.y}px;width:256px;height:256px">`).join("")}<div style="position:absolute;left:${t.px - 14}px;top:${t.py - 34}px;font-size:34px">📍</div></div>
+    <p class="doux" style="text-align:center">${esc(t.legende || S.lieu)} · imagerie satellite © Esri · position indiquée par le client</p>${mentions}`);
+}
+// Rendus 3D : les images de la maison (photos réalistes ou maquette)
+const rendus = [...(S.perspectives || []), ...photos.map((p) => p.data)];
+if (rendus.length) await pdf("13-rendus-3d.pdf", rendus.map((src, i) => `<div class="${i ? "saut" : ""}">${tete("Rendus 3D")}<img class="photo" src="${src}"></div>`).join("") + `<p class="note">Images d'illustration réalisées à partir de la maquette 3D du plan : matériaux, végétation et décoration sont des suggestions.</p>${mentions}`, true);
 if (d) await pdf("devis-detaille.pdf", blocDevis);
 if (blocConcept) await pdf("concept-innovations.pdf", blocConcept);
 // Facture de chaque commande payée
