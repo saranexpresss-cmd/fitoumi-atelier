@@ -15,7 +15,7 @@ const sortie = path.join(ici, "livraison"); fs.mkdirSync(sortie, { recursive: tr
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const montant = (n) => `${Math.round(n).toLocaleString("fr-FR").replace(/ /g, " ")} ${S.devis?.devise === "EUR" ? "€" : S.devis?.devise || "FCFA"}`;
 const date = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-const avecImages = ["visuel", "premium"].includes(S.pack);
+const avecImages = ["visuel", "premium"].includes(S.pack) || Boolean(S.collection);
 
 const navigateur = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const page = await navigateur.newPage({ viewport: { width: 1600, height: 900 } });
@@ -138,6 +138,20 @@ if (S.pack === "premium") {
   await pdf("dossier-complet.pdf", `<div class="couverture"><p class="doux">NINA ARCHITECTURE · DOSSIER DE PRÉSENTATION</p><h1>${esc(S.titre)}</h1><p style="font-size:14pt">${esc(S.lieu)}</p>${images[0] || ""}<p class="doux">${date} · esquisse non contractuelle, à faire valider et signer par un architecte agréé pour le permis de construire.</p></div>
     <div class="saut">${tete("Perspectives 3D")}<div class="grille">${images.slice(1).join("")}</div></div>
     ${blocConcept ? `<div class="saut">${blocConcept}</div>` : ""}<div class="saut">${blocPlan}</div><div class="saut">${blocTechnique}</div><div class="saut">${blocDevis}</div>`);
+}
+// Modèle de la collection (agent de la boutique) : visuels de vente (la maison, jamais le plan) et ZIP du dossier
+if (S.collection) {
+  const C = S.collection, fond = photos[0]?.data || "";
+  const CSS = `*{box-sizing:border-box;margin:0}body{font-family:Arial,sans-serif;color:#fff}.badge{display:inline-block;background:#FACC15;color:#0F172A;font-weight:800;border-radius:999px}.marque{font-weight:800;letter-spacing:.18em;color:#22D3EE}`;
+  await page.setViewportSize({ width: 1200, height: 1200 });
+  await page.setContent(`<style>${CSS}body{width:1200px;height:1200px;background:#fff;display:grid;grid-template-rows:1fr 330px}.f{padding:30px 40px 0;display:grid;place-items:center;background:linear-gradient(#DBEAFE,#fff 75%)}.f svg{width:100%;height:auto;max-height:840px}.bas{background:#0B1023;padding:40px 60px;position:relative}h1{font-size:84px;font-weight:800;margin-top:10px}p{font-size:32px;margin-top:10px;opacity:.9}.badge{position:absolute;right:60px;top:44px;font-size:44px;padding:14px 30px}</style><div class="f">${C.facade}</div><div class="bas"><div class="marque">NINA ARCHITECTURE · ${esc(C.style).toUpperCase()}</div><h1>${esc(C.nom)}</h1><p>${esc(C.resume)} · 12 plans PDF</p><span class="badge">${esc(C.prixTexte)}</span></div>`);
+  await page.screenshot({ path: path.join(sortie, "vitrine.png") });
+  await page.setViewportSize({ width: 1404, height: 520 });
+  await page.setContent(`<style>${CSS}body{width:1404px;height:520px;background:#0B1023;display:grid;grid-template-columns:600px 1fr}.f{background:linear-gradient(#DBEAFE,#fff 75%);padding:14px;display:grid;place-items:center}.f svg{width:100%;height:auto;max-height:490px}.photo{position:relative;background:url(${fond}) center/cover}.photo::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(11,16,35,.88),rgba(11,16,35,.15) 75%)}.t{position:absolute;z-index:1;left:44px;top:50%;transform:translateY(-50%)}h1{font-size:58px;font-weight:800}p{font-size:25px;margin:10px 0 20px}.badge{font-size:30px;padding:10px 26px}</style><div class="f">${C.facade}</div><div class="photo"><div class="t"><div class="marque" style="font-size:20px;margin-bottom:12px">NINA ARCHITECTURE</div><h1>${esc(C.nom)}</h1><p>${esc(C.resume)}</p><span class="badge">${esc(C.prixTexte)}</span></div></div>`);
+  await page.screenshot({ path: path.join(sortie, "banniere.png") });
+  const { execSync } = await import("node:child_process");
+  execSync(`zip -q -j "${path.join(sortie, "dossier-complet.zip")}" ${fs.readdirSync(sortie).filter((f) => /^\d\d-.+\.pdf$/.test(f)).map((f) => `"${path.join(sortie, f)}"`).join(" ")}`);
+  console.log("✅ visuels de vente + dossier-complet.zip");
 }
 await navigateur.close();
 process.exit(0);
