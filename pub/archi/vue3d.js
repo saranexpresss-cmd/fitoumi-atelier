@@ -104,32 +104,33 @@ export function afficher3D(conteneur, plan, options = {}) {
     boite(1.6, 0.03, zFin - avant, xm, 0.015, (avant + zFin) / 2, M.paves, scene, false, 1.2);
   }
 
-  // ---------- Maison : soubassement en pierre, sols, murs ----------
+  // ---------- Maison : soubassement en pierre, puis chaque niveau (sols, murs, menuiseries) ----------
   boite(W + 0.06, SOL, D + 0.06, W / 2, SOL / 2, D / 2, M.pierre, scene, true, 1.5);
+  const construireNiveau = (pl, base) => {
   const SOLS = { douche: M.carrelage, sdb: M.carrelage, wc: M.carrelage, cuisine: M.carrelage, buanderie: M.carrelage, chambre: M.parquet, bureau: M.parquet };
-  for (const q of plan.pieces) boite(q.w, 0.02, q.h, q.x + q.w / 2, SOL + 0.01, q.y + q.h / 2, SOLS[q.type] || M.carrelage, scene, false, 1.2);
+  for (const q of pl.pieces) boite(q.w, 0.02, q.h, q.x + q.w / 2, base + 0.01, q.y + q.h / 2, SOLS[q.type] || M.carrelage, scene, false, 1.2);
 
   const exterieur = (w) => (w.ext ? (w.y1 === w.y2 ? (w.y1 === 0 ? -1 : 1) : (w.x1 === 0 ? -1 : 1)) : 0); // sens de la façade
   const trousDe = (w) => {
     const h = w.y1 === w.y2, fixe = h ? w.y1 : w.x1, a0 = Math.min(h ? w.x1 : w.y1, h ? w.x2 : w.y2), a1 = Math.max(h ? w.x1 : w.y1, h ? w.x2 : w.y2);
-    return { h, fixe, a0, a1, trous: plan.ouvertures.filter((o) => o.axe === (h ? "h" : "v") && Math.abs(o.fixe - fixe) < 0.02 && o.centre > a0 && o.centre < a1).sort((u, v) => u.centre - v.centre) };
+    return { h, fixe, a0, a1, trous: pl.ouvertures.filter((o) => o.axe === (h ? "h" : "v") && Math.abs(o.fixe - fixe) < 0.02 && o.centre > a0 && o.centre < a1).sort((u, v) => u.centre - v.centre) };
   };
   const morceau = (h, fixe, a, b, y0, y1, ep, m, decal = 0, ech = 2) => {
     if (b - a < 0.01 || y1 - y0 < 0.01) return null;
     const L = b - a, c = (a + b) / 2, y = (y0 + y1) / 2;
     return h ? boite(L, y1 - y0, ep, c, y, fixe + decal, m, scene, true, ech) : boite(ep, y1 - y0, L, fixe + decal, y, c, m, scene, true, ech);
   };
-  const haut = SOL + H;
-  for (const w of plan.murs) {
+  const haut = base + H;
+  for (const w of pl.murs) {
     if (w.ouvert) continue;
     const { h, fixe, a0, a1, trous } = trousDe(w), ext = exterieur(w), ep = w.ep;
     const m = ext ? M.enduit : M.interieur;
     let c = a0;
     for (const o of trous) {
       const a = o.centre - o.largeur / 2, b = o.centre + o.largeur / 2;
-      morceau(h, fixe, c, a, SOL, haut, ep, m);
-      const bas = o.type === "fenetre" ? SOL + (o.allege || 1) : SOL, hautO = o.type === "fenetre" ? bas + (o.hauteur || 1.2) : SOL + (o.type === "baie" ? 2.3 : 2.15);
-      morceau(h, fixe, a, b, SOL, bas, ep, m); morceau(h, fixe, a, b, hautO, haut, ep, m);
+      morceau(h, fixe, c, a, base, haut, ep, m);
+      const bas = o.type === "fenetre" ? base + (o.allege || 1) : base, hautO = o.type === "fenetre" ? bas + (o.hauteur || 1.2) : base + (o.type === "baie" ? 2.3 : 2.15);
+      morceau(h, fixe, a, b, base, bas, ep, m); morceau(h, fixe, a, b, hautO, haut, ep, m);
       if (o.type === "fenetre" || o.type === "baie") {
         const cadre = 0.06, prof = 0.07;
         morceau(h, fixe, a, b, bas, bas + cadre, prof, M.alu); morceau(h, fixe, a, b, hautO - cadre, hautO, prof, M.alu);
@@ -139,12 +140,26 @@ export function afficher3D(conteneur, plan, options = {}) {
         morceau(h, fixe, a + cadre, b - cadre, bas + cadre, hautO - cadre, 0.02, M.verre);
         if (ext && o.type === "fenetre") { morceau(h, fixe, a - 0.05, b + 0.05, bas - 0.06, bas, ep + 0.08, M.beton, ext * 0.04); morceau(h, fixe, a - 0.08, b + 0.08, hautO, hautO + 0.12, ep + 0.04, M.rive, ext * 0.02); }
       } else if (o.type === "entree" || (ext && o.type === "porte")) {
-        morceau(h, fixe, a + 0.03, b - 0.03, SOL, hautO, 0.06, M.bois);
-        morceau(h, fixe, b - 0.14, b - 0.08, SOL + 1.0, SOL + 1.05, 0.12, M.sombre);
+        morceau(h, fixe, a + 0.03, b - 0.03, base, hautO, 0.06, M.bois);
+        morceau(h, fixe, b - 0.14, b - 0.08, base + 1.0, base + 1.05, 0.12, M.sombre);
       }
       c = b;
     }
-    morceau(h, fixe, c, a1, SOL, haut, ep, m);
+    morceau(h, fixe, c, a1, base, haut, ep, m);
+  }
+    // Escalier en U (deux volées de marches, palier au fond)
+    for (const q of base === SOL ? pl.pieces.filter((x) => x.type === "escalier") : []) {
+      const v = (q.w - 0.2) / 2, n = 9, hm = H / 2 / n, pas = Math.min(0.28, (q.h - 1.2) / n);
+      for (let k = 0; k < n; k++) { boite(v, hm * (k + 1), pas, q.x + 0.1 + v / 2, base + (hm * (k + 1)) / 2, q.y + 0.1 + k * pas + pas / 2, M.beton, scene, true); boite(v, hm * (k + 1), pas, q.x + 0.1 + v * 1.5, base + H / 2 + (hm * (k + 1)) / 2, q.y + 0.1 + (n - 1 - k) * pas + pas / 2, M.beton, scene, true); }
+      boite(q.w - 0.2, 0.15, 1.1, q.x + q.w / 2, base + H / 2, q.y + q.h - 0.6, M.beton, scene, true);
+    }
+    return haut;
+  };
+  const hautRDC = construireNiveau(plan, SOL);
+  let haut = hautRDC;
+  if (plan.etage) {
+    boite(W + 0.1, 0.25, D + 0.1, W / 2, hautRDC + 0.125, D / 2, M.blanc); // dalle entre les niveaux
+    haut = construireNiveau({ ...plan.etage, pieces: plan.etage.pieces }, hautRDC + 0.25);
   }
   boite(W + 0.1, 0.25, D + 0.1, W / 2, haut + 0.125, D / 2, M.blanc, groupeToit); // dalle haute / chaînage
 
@@ -173,14 +188,20 @@ export function afficher3D(conteneur, plan, options = {}) {
   // Terrasse couverte : dallage, poteaux enduits, auvent (appentis)
   if (T) {
     boite(T.w, SOL - 0.02, T.h, T.x + T.w / 2, (SOL - 0.02) / 2, T.y + T.h / 2, M.dallage, scene, true, 1);
-    const hP = haut - 0.15;
+    const hP = hautRDC - 0.15;
     for (const x of [T.x + 0.2, T.x + T.w - 0.2]) { boite(0.28, hP - SOL, 0.28, x, (SOL + hP) / 2, T.y + 0.2, M.enduit, scene, true, 2); boite(0.36, 0.12, 0.36, x, SOL + 0.06, T.y + 0.2, M.pierre); }
+    if (plan.etage) {
+      // Balcon de l'étage : dalle au-dessus de la terrasse, garde-corps
+      boite(T.w + 0.3, 0.22, T.h + 0.3, T.x + T.w / 2, hautRDC + 0.11, T.y + T.h / 2 - 0.15, M.blanc);
+      for (const [sx, sz, x, z] of [[T.w + 0.3, 0.08, T.x + T.w / 2, T.y - 0.25], [0.08, T.h + 0.3, T.x - 0.1, T.y + T.h / 2 - 0.15], [0.08, T.h + 0.3, T.x + T.w + 0.1, T.y + T.h / 2 - 0.15]]) boite(sx, 1.0, sz, x, hautRDC + 0.72, z, M.enduit, scene, true, 2);
+    } else {
     const inc = toiture === "terrasse" ? 0 : THREE.MathUtils.degToRad(12), prof = T.h + 0.5, yHaut = haut + (toiture === "terrasse" ? 0 : 0.12), yBas = yHaut - prof * Math.tan(inc);
     const auvent = new THREE.Mesh(new THREE.PlaneGeometry(T.w + 0.6, prof / Math.cos(inc)), toiture === "terrasse" ? M.blanc : M.tuiles);
     const uvA = auvent.geometry.attributes.uv; for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) * (T.w + 0.6), uvA.getY(i) * prof);
     auvent.position.set(T.x + T.w / 2, (yHaut + yBas) / 2, -prof / 2); auvent.rotation.x = -Math.PI / 2 - inc; auvent.castShadow = true; auvent.receiveShadow = true; groupeToit.add(auvent);
     boite(T.w + 0.6, 0.2, 0.05, T.x + T.w / 2, yBas - 0.08, -prof, M.rive, groupeToit);
     boite(T.w + 0.4, 0.14, 0.28, T.x + T.w / 2, hP + 0.07, T.y + 0.2, M.blanc, groupeToit);
+    }
   }
   scene.add(groupeToit);
 
@@ -217,8 +238,8 @@ export function afficher3D(conteneur, plan, options = {}) {
   }
 
   // ---------- Mobilier ----------
-  for (const m of plan.meubles) {
-    const cx = m.x + m.w / 2, cz = m.y + m.h / 2;
+  for (const [m, base] of [...plan.meubles.map((x) => [x, SOL]), ...(plan.etage?.meubles || []).map((x) => [x, hautRDC + 0.25])]) {
+    const SOL = base, cx = m.x + m.w / 2, cz = m.y + m.h / 2;
     if (m.type === "lit") { boite(m.w, 0.35, m.h, cx, SOL + 0.2, cz, M.drap); boite(m.w + 0.06, 0.9, 0.08, cx, SOL + 0.45, m.tete === "bas" ? m.y + m.h : m.y, M.bois); }
     else if (m.type === "canape") { boite(m.w, 0.42, m.h, cx, SOL + 0.21, cz, M.tissu); boite(m.w, 0.42, 0.2, cx, SOL + 0.62, m.y + m.h - 0.1, M.tissu); }
     else if (m.type === "table") { boite(m.w, 0.05, m.h, cx, SOL + 0.75, cz, M.bois); for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) boite(0.06, 0.73, 0.06, cx + dx * (m.w / 2 - 0.1), SOL + 0.37, cz + dz * (m.h / 2 - 0.1), M.sombre); }

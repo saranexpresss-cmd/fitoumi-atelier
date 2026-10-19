@@ -42,17 +42,17 @@ const STYLE = `<style>
   table { width: 100%; border-collapse: collapse; font-size: 10pt; } td, th { border-bottom: 1px solid #E2E8F0; padding: 5px 6px; text-align: left; }
   th { background: #F1F5F9; } .m { text-align: right; white-space: nowrap; } .total td { font-weight: 800; border-top: 2px solid #0F172A; background: #F8FAFC; }
   .note { font-size: 8.5pt; color: #64748B; margin-top: 12px; line-height: 1.4; } .saut { page-break-before: always; break-before: page; }
-  .plan svg { width: 100%; height: auto; max-height: 168mm; display: block; }
+  .plan svg { width: 100%; height: auto; max-height: 168mm; display: block; } .plan svg + svg { page-break-before: always; break-before: page; margin-top: 8mm; }
   .photo { width: 100%; border-radius: 4px; margin: 6px 0; } .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .couverture { height: 260mm; display: flex; flex-direction: column; justify-content: center; } .couverture h1 { font-size: 34pt; }
 </style>`;
 const tete = (titre) => `<div class="tete"><b><img src="https://bureau.nina-services.com/marque/nina-services-icone-180.png" style="width:26px;height:26px;border-radius:6px;vertical-align:-6px;margin-right:8px" alt="">NINA ARCHITECTURE</b><span>${esc(titre)}<br>${esc(S.titre)} · ${esc(S.lieu)} · ${date}</span></div>`;
-const blocPlan = `${tete("Plan du rez-de-chaussée")}<div class="plan">${S.svg}</div>`;
+const blocPlan = `${tete(S.plan?.etage ? "Plans du rez-de-chaussée et de l'étage" : "Plan du rez-de-chaussée")}<div class="plan">${S.svg}</div>`;
 // Fiche technique : tableau des surfaces, nomenclature des menuiseries, caractéristiques et points de vigilance
 const P = S.plan || {}, f2 = (v) => Number(v || 0).toFixed(2).replace(".", ",");
 const SOLS = { douche: "Carrelage antidérapant", sdb: "Carrelage antidérapant", wc: "Carrelage", cuisine: "Carrelage", buanderie: "Carrelage", chambre: "Parquet ou carrelage", bureau: "Parquet ou carrelage", salon: "Carrelage grand format", couloir: "Carrelage" };
-const pieces = (P.pieces || []).slice().sort((a, b) => (a.type === "couloir") - (b.type === "couloir"));
-const ouv = P.ouvertures || [], grouper = (l) => Object.values(l.reduce((m, o) => { const k = `${o.type}|${o.largeur}|${o.hauteur || ""}|${o.allege || ""}`; (m[k] = m[k] || { ...o, n: 0 }).n++; return m; }, {}));
+const pieces = [...(P.pieces || []).map((q) => ({ ...q, nom: P.etage ? `RDC · ${q.nom}` : q.nom })), ...((P.etage?.pieces) || []).map((q) => ({ ...q, nom: `Étage · ${q.nom}` }))].filter((q) => q.type !== "escalier" || !q.nom.startsWith("Étage")).sort((a, b) => (a.type === "couloir") - (b.type === "couloir"));
+const ouv = [...(P.ouvertures || []), ...((P.etage?.ouvertures) || [])], grouper = (l) => Object.values(l.reduce((m, o) => { const k = `${o.type}|${o.largeur}|${o.hauteur || ""}|${o.allege || ""}`; (m[k] = m[k] || { ...o, n: 0 }).n++; return m; }, {}));
 const NOMS_OUV = { entree: "Porte d'entrée", porte: "Porte intérieure", passage: "Passage libre", fenetre: "Fenêtre", baie: "Baie vitrée coulissante" };
 const blocTechnique = `${tete("Fiche technique")}<h1>Fiche technique du plan</h1>
   <p class="doux">${esc(S.titre)} · ${esc(S.lieu)} · surface des pièces ${f2(P.habitable)} m² · emprise au sol ${f2(P.emprise)} m²${P.terrasse ? ` · terrasse couverte ${f2(P.terrasse.surface)} m²` : ""}</p>
@@ -65,7 +65,7 @@ const blocTechnique = `${tete("Fiche technique")}<h1>Fiche technique du plan</h1
   ${grouper(ouv).sort((a, b) => a.type.localeCompare(b.type)).map((o) => `<tr><td>${NOMS_OUV[o.type] || o.type}</td><td class="m">${o.n}</td><td class="m">${f2(o.largeur)}</td><td class="m">${o.type === "fenetre" ? f2(o.hauteur || 1.2) : o.type === "baie" ? "2,30" : o.type === "passage" ? "—" : "2,15"}</td><td class="m">${o.type === "fenetre" ? f2(o.allege || 1) : "—"}</td></tr>`).join("")}</tbody></table>
   <h2>3. Caractéristiques de construction (hypothèses de l'esquisse)</h2>
   <ul><li>Murs extérieurs : 20 cm (agglos ou briques, enduit deux faces) · cloisons intérieures : 15 cm</li>
-  <li>Hauteur sous plafond : ${f2((P.hauteur || 3) - 0.2)} m · dalle ou charpente selon la toiture retenue</li>
+  <li>Hauteur sous plafond : ${f2((P.hauteur || 3) - 0.2)} m · dalle ou charpente selon la toiture retenue</li>${P.etage ? `<li>Maison à étage (R+1) : structure en béton armé (poteaux, poutres, dalle pleine ou à corps creux) à dimensionner par un bureau d'études ; escalier en U de 2,40 m de large</li>` : ""}
   <li>Dimensions hors tout de la maison : ${f2(P.largeur)} m × ${f2(P.profondeur)} m${P.terrasse ? `, plus terrasse de ${f2(P.terrasse.w)} × ${f2(P.terrasse.h)} m en façade` : ""}</li>
   <li>Ventilation : ouvertures sur deux façades opposées dans les pièces de vie quand c'est possible</li></ul>
   <h2>4. À vérifier avant de construire</h2>
