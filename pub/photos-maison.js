@@ -18,7 +18,9 @@ const PRISES = [
   { nom: "interieur", toit: false, cam: orbite(deg(-25), R * 0.5, R * 1.3 + 3), cible: V(W / 2, 0, D / 2), fov: 42 },
 ];
 window.photos = [];
-for (const p of PRISES) {
+// ?prises=vue-ensemble,facade : seulement ces vues (aperçu avant achat : jamais l'intérieur)
+const voulues = params.get("prises")?.split(",");
+for (const p of PRISES.filter((x) => !voulues || voulues.includes(x.nom))) {
   vue.toit(p.toit);
   vue.image(p.cam, p.cible, p.fov);
   window.photos.push({ nom: p.nom, data: vue.canvas.toDataURL("image/jpeg", 0.92) });

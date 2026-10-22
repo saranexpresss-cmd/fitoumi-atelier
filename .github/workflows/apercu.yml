@@ -1,0 +1,66 @@
+# Atelier Nina Architecture : aperçu d'une esquisse AVANT achat (plan protégé + 2 vues 3D extérieures), envoyé au client sur WhatsApp.
+# Déclenché par l'API GitHub (workflow_dispatch). Les images vont directement dans le stockage privé de Nina Architecture (jamais publiées ici).
+name: Apercu esquisse Nina Architecture
+
+on:
+  workflow_dispatch:
+    inputs:
+      id: { description: "Identifiant du projet", required: true }
+      source: { description: "Adresse du scénario (esquisse)", required: true }
+      jeton: { description: "Jeton de retour (propre à cet aperçu)", required: true }
+
+permissions:
+  contents: read
+
+jobs:
+  apercu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ID: ${{ inputs.id }}
+      SOURCE: ${{ inputs.source }}
+      JETON: ${{ inputs.jeton }}
+    steps:
+      - name: Contrôles
+        run: |
+          echo "::add-mask::$JETON"
+          echo "::add-mask::$SOURCE"
+          [[ "$ID" =~ ^[a-f0-9]{16}$ ]] || { echo "Identifiant invalide"; exit 1; }
+          [[ "$SOURCE" =~ ^https://archi\.nina-services\.com/api/apercu-plan/[a-f0-9]{16}\?jeton=[a-f0-9]{32}$ ]] || { echo "Source invalide"; exit 1; }
+          [[ "$JETON" =~ ^[a-f0-9]{32}$ ]] || { echo "Jeton invalide"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Polices
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-core
+
+      - name: Outils (navigateur invisible)
+        working-directory: pub
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+
+      - name: Aperçu (plan protégé et vues 3D)
+        working-directory: pub
+        run: |
+          mkdir -p scenarios livraison
+          curl -sf "$SOURCE" -o "scenarios/apercu-$ID.json"
+          node apercu-maison.mjs "scenarios/apercu-$ID.json"
+
+      - name: Dépôt privé et envoi au client
+        working-directory: pub
+        run: |
+          for f in livraison/apercu-*; do
+            curl -sf -X POST "https://archi.nina-services.com/api/apercu-fichier/$ID?fichier=$(basename "$f")" -H "x-jeton: $JETON" -H "Content-Type: application/octet-stream" --data-binary @"$f" > /dev/null || { echo "Dépôt impossible : $f"; exit 1; }
+            echo "déposé : $(basename "$f")"
+          done
+          curl -sf -X POST "https://archi.nina-services.com/api/apercu-retour/$ID" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"ok\":true}"
+
+      - name: Prévenir le site (échec)
+        if: failure()
+        run: |
+          curl -s -X POST "https://archi.nina-services.com/api/apercu-retour/$ID" -H "Content-Type: application/json" -d "{\"jeton\":\"$JETON\",\"erreur\":\"aperçu échoué (exécution $GITHUB_RUN_ID)\"}"
