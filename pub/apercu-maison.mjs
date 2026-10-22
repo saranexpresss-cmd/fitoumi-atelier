@@ -43,3 +43,4 @@ await plan.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>
 await plan.screenshot({ path: path.join(sortie, "apercu-plan.png"), fullPage: true });
 console.log("✅ plan protégé");
 await navigateur.close();
+process.exit(0); // le petit serveur local garderait le programme ouvert
