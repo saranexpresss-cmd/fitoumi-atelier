@@ -21,13 +21,22 @@ function chargerModele(sexe = "h") {
 // Tenue dessinée dans le rendu, d'après la position de repos du sommet (mètres, pieds à y = sol).
 // Couleurs en sRGB → converties en linéaire dans le shader.
 const TENUE = {
-  peau: "#a8714d", haut: "#1fb556", liseré: "#dcfce7", short: "#273142", bande: "#22c55e",
-  chaussette: "#f1f5f9", chaussure: "#3b4252", semelle: "#f8fafc", cheveux: "#1b1410",
+  haut: "#1fb556", liseré: "#dcfce7", short: "#273142", bande: "#22c55e",
+  chaussette: "#f1f5f9", chaussure: "#3b4252", semelle: "#f8fafc",
 };
+// Le client choisit à quoi ressemble son coach : teinte de peau (et cheveux assortis), du plus clair au plus foncé
+export const TEINTES = {
+  claire: { peau: "#eec29f", cheveux: "#7b5331", reflet: 0xffd2b8 },
+  doree: { peau: "#d9a47a", cheveux: "#2e1f15", reflet: 0xffc9a8 },
+  mate: { peau: "#c08658", cheveux: "#1d1510", reflet: 0xffc4a0 },
+  brune: { peau: "#a8714d", cheveux: "#1b1410", reflet: 0xffc4a0 },
+  ebene: { peau: "#6c432b", cheveux: "#120d0a", reflet: 0xe8b090 },
+};
+export const teinteDe = (cle) => TEINTES[cle] || TEINTES.brune;
 const vec3 = (hex) => { const c = new THREE.Color(hex).convertSRGBToLinear(); return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`; };
 
-function matiereCorps(L, sol, legging = false) {
-  const m = new THREE.MeshPhysicalMaterial({ roughness: 0.55, sheen: 0.3, sheenRoughness: 0.55, sheenColor: 0xffc4a0 });
+function matiereCorps(L, sol, legging = false, teinte = TEINTES.brune) {
+  const m = new THREE.MeshPhysicalMaterial({ roughness: 0.55, sheen: 0.3, sheenRoughness: 0.55, sheenColor: teinte.reflet });
   const f = (x) => x.toFixed(4);
   m.onBeforeCompile = (s) => {
     s.vertexShader = s.vertexShader
@@ -65,8 +74,8 @@ function matiereCorps(L, sol, legging = false) {
         float sourcils = step(0.011, ax) * step(ax, 0.058) * smoothstep(zO - 0.012, zO - 0.004, p.z)
                        * smoothstep(arc - 0.0045, arc - 0.0025, p.y) * (1.0 - smoothstep(arc + 0.002, arc + 0.004, p.y));
         cheveux = max(cheveux, sourcils * 0.9);
-        vec3 c = ${vec3(TENUE.peau)};
-        c = mix(c, ${vec3(TENUE.cheveux)}, cheveux);
+        vec3 c = ${vec3(teinte.peau)};
+        c = mix(c, ${vec3(teinte.cheveux)}, cheveux);
         c = mix(c, ${vec3(TENUE.haut)}, haut);
         c = mix(c, ${vec3(TENUE.liseré)}, lisere);
         c = mix(c, ${vec3(TENUE.short)}, shortZ);
@@ -329,7 +338,8 @@ function creerScene(conteneur, { photo = false } = {}) {
 // ---------- API publique : même usage que l'ancienne démo ----------
 // animer(conteneur, idExercice, { periode }) → fonction d'arrêt
 // pilotage (outil vidéo du PC seulement) : pas de boucle ; pilotage.rendre(ms, angleDeg) dessine l'image voulue
-export function animer(conteneur, id, { periode, fige, cadre, sexe, photo, pilotage } = {}) {
+export function animer(conteneur, id, { periode, fige, cadre, sexe, photo, pilotage, teinte } = {}) {
+  const couleurs = teinteDe(teinte);
   conteneur.innerHTML = `<div class="avatar-chargement" aria-hidden="true"></div>`;
   conteneur.setAttribute("role", "img");
   conteneur.setAttribute("aria-label", t("seance.demo"));
@@ -347,10 +357,10 @@ export function animer(conteneur, id, { periode, fige, cadre, sexe, photo, pilot
     const pilote = new Pilote(os, groupe);
     const iCorps = json.groupes.findIndex((g) => g.nom === "corps");
     corps.material[iCorps].dispose();
-    corps.material[iCorps] = matiereCorps(pilote.L, json.sol, json.sexe === "f");
+    corps.material[iCorps] = matiereCorps(pilote.L, json.sol, json.sexe === "f", couleurs);
     if (json.sexe === "f") { // coach femme : chignon, attaché à l'os de la tête
       const tete = pilote.os.head;
-      const chignon = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 16), new THREE.MeshPhysicalMaterial({ color: new THREE.Color(TENUE.cheveux), roughness: 0.85, sheen: 0.5, sheenColor: 0x6b4f3a }));
+      const chignon = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 16), new THREE.MeshPhysicalMaterial({ color: new THREE.Color(couleurs.cheveux), roughness: 0.85, sheen: 0.5, sheenColor: 0x6b4f3a }));
       chignon.scale.set(1, 0.85, 0.9);
       chignon.position.copy(tete.worldToLocal(V(0, pilote.L.oeil.y + 0.085, pilote.L.tete.z - 0.075)));
       chignon.castShadow = true;
@@ -407,6 +417,7 @@ export function animer(conteneur, id, { periode, fige, cadre, sexe, photo, pilot
     let derniere = 0;
     const image = (t) => {
       if (!actif) return;
+      if (!conteneur.isConnected) { actif = false; nettoyer(); return; } // l'écran a changé : on libère la carte graphique
       requestAnimationFrame(image);
       if (document.hidden || t - derniere < intervalle - 2) return;
       derniere = t;
