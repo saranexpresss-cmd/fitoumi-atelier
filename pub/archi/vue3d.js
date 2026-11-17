@@ -4,30 +4,77 @@
 // menuiseries détaillées, soubassement en pierre, jardin clos avec portail et végétation.
 import * as THREE from "./vendor/three/three.module.min.js";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
-import { RoomEnvironment } from "./vendor/three/RoomEnvironment.js";
 import { Sky } from "./vendor/three/Sky.js";
 
 const SOL = 0.45; // plancher surélevé (soubassement)
+// Même palette que la collection et ses façades techniques.
+const STYLES = {
+  "moderne-blanc": { enduit: 0xF8FAFC, accent: 0x334155 }, "moderne-sable": { enduit: 0xEAD9BF, accent: 0x78350F },
+  "moderne-gris": { enduit: 0xE5E7EB, accent: 0x1F2937 }, "tropical-ocre": { enduit: 0xF2D7A9, accent: 0x9A3412 },
+  "classique-creme": { enduit: 0xF5EFE3, accent: 0x92400E },
+};
 
 // ---------- Textures générées (aucune image à télécharger) ----------
 const aleas = (graine) => () => ((graine = (graine * 16807) % 2147483647) / 2147483647);
 function texture(dessin, taille = 512) {
   const c = document.createElement("canvas"); c.width = c.height = taille;
-  dessin(c.getContext("2d"), taille);
+  const contexte = c.getContext("2d"); contexte.scale(taille / 512, taille / 512); dessin(contexte, 512);
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 const bruit = (g, n, fond, teintes, r = aleas(7), tmin = 1, tmax = 3) => { g.fillStyle = fond; g.fillRect(0, 0, n, n); for (let i = 0; i < n * n * 0.02; i++) { g.fillStyle = teintes[Math.floor(r() * teintes.length)]; const t = tmin + r() * (tmax - tmin); g.fillRect(r() * n, r() * n, t, t); } };
 const TEX = {
-  enduit: () => texture((g, n) => bruit(g, n, "#EFE6D6", ["#E6DBC8", "#F6EFE3", "#E9DFCD", "#F2EADC"])),
-  pierre: () => texture((g, n) => { const r = aleas(3); g.fillStyle = "#6B6259"; g.fillRect(0, 0, n, n); for (let y = 0; y < n; y += 64) for (let x = -((y / 2) % 128); x < n; x += 128) { const v = 120 + Math.floor(r() * 50); g.fillStyle = `rgb(${v},${v - 8},${v - 18})`; g.fillRect(x + 3, y + 3, 122, 58); } }),
-  carrelage: () => texture((g, n) => { bruit(g, n, "#E9E4DA", ["#E2DCD0", "#EFEBE3"]); g.strokeStyle = "#CFC8BB"; g.lineWidth = 3; for (let i = 0; i <= n; i += n / 2) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, n); g.moveTo(0, i); g.lineTo(n, i); g.stroke(); } }),
-  parquet: () => texture((g, n) => { const r = aleas(11); for (let y = 0; y < n; y += 32) { let x = -r() * 200; while (x < n) { const l = 120 + r() * 140, v = 150 + Math.floor(r() * 40); g.fillStyle = `rgb(${v + 30},${v},${v - 45})`; g.fillRect(x, y, l, 31); g.fillStyle = "rgba(90,60,30,.35)"; g.fillRect(x + l - 2, y, 2, 31); x += l; } g.fillStyle = "rgba(90,60,30,.4)"; g.fillRect(0, y + 31, n, 1); } }),
-  herbe: () => texture((g, n) => bruit(g, n, "#4D7230", ["#46692B", "#557D36", "#3F6127", "#5E8540", "#6B7A3A"], aleas(5), 1, 5)),
-  paves: () => texture((g, n) => { const r = aleas(9); g.fillStyle = "#8C857B"; g.fillRect(0, 0, n, n); for (let y = 0; y < n; y += 64) for (let x = (y / 64) % 2 ? -32 : 0; x < n; x += 64) { const v = 165 + Math.floor(r() * 35); g.fillStyle = `rgb(${v},${v - 6},${v - 14})`; g.fillRect(x + 3, y + 3, 58, 58); } }),
-  tuiles: () => texture((g, n) => { const r = aleas(13); g.fillStyle = "#6E3420"; g.fillRect(0, 0, n, n); for (let y = 0; y < n; y += 32) for (let x = (y / 32) % 2 ? -32 : 0; x < n; x += 64) { const v = Math.floor(r() * 30); const grad = g.createLinearGradient(0, y, 0, y + 32); grad.addColorStop(0, `rgb(${178 + v},${88 + v / 2},52)`); grad.addColorStop(1, `rgb(${138 + v},${62 + v / 2},38)`); g.fillStyle = grad; g.fillRect(x + 2, y + 1, 60, 30); g.fillStyle = "rgba(60,25,12,.35)"; g.fillRect(x + 2, y + 28, 60, 3); } }),
-  bois: () => texture((g, n) => { g.fillStyle = "#8A5A35"; g.fillRect(0, 0, n, n); const r = aleas(17); for (let i = 0; i < 90; i++) { g.strokeStyle = `rgba(${60 + r() * 40},${35 + r() * 20},15,.35)`; g.lineWidth = 1 + r() * 2; g.beginPath(); const x = r() * n; g.moveTo(x, 0); g.bezierCurveTo(x + 8, n / 3, x - 8, (2 * n) / 3, x + 4, n); g.stroke(); } }),
+  enduit: (taille) => texture((g, n) => bruit(g, n, "#F1F0ED", ["#E3E1DC", "#F8F7F3", "#ECEAE5", "#F5F3EF"], aleas(7), 0.5, 1.6), taille),
+  pierre: (taille) => texture((g, n) => { const r = aleas(3); g.fillStyle = "#6B6259"; g.fillRect(0, 0, n, n); for (let y = 0; y < n; y += 64) for (let x = -((y / 2) % 128); x < n; x += 128) { const v = 120 + Math.floor(r() * 50); g.fillStyle = `rgb(${v},${v - 8},${v - 18})`; g.fillRect(x + 3, y + 3, 122, 58); } }, taille),
+  carrelage: (taille) => texture((g, n) => { bruit(g, n, "#E9E4DA", ["#E2DCD0", "#EFEBE3"]); g.strokeStyle = "#CFC8BB"; g.lineWidth = 3; for (let i = 0; i <= n; i += n / 2) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, n); g.moveTo(0, i); g.lineTo(n, i); g.stroke(); } }, taille),
+  parquet: (taille) => texture((g, n) => { const r = aleas(11); for (let y = 0; y < n; y += 32) { let x = -r() * 200; while (x < n) { const l = 120 + r() * 140, v = 150 + Math.floor(r() * 40); g.fillStyle = `rgb(${v + 30},${v},${v - 45})`; g.fillRect(x, y, l, 31); g.fillStyle = "rgba(90,60,30,.35)"; g.fillRect(x + l - 2, y, 2, 31); x += l; } g.fillStyle = "rgba(90,60,30,.4)"; g.fillRect(0, y + 31, n, 1); } }, taille),
+  herbe: (taille) => texture((g, n) => { const r = aleas(5); bruit(g, n, "#697147", ["#606E40", "#758051", "#5B663D", "#89915C"], r, 2, 10); for (let i = 0; i < 26000; i++) { const x = r() * n, y = r() * n; g.strokeStyle = ["#58663C", "#7A8651", "#929463", "#636C42"][i % 4]; g.lineWidth = 0.6; g.beginPath(); g.moveTo(x, y); g.lineTo(x + r() * 2 - 1, y - 1 - r() * 4); g.stroke(); } }, taille),
+  paves: (taille) => texture((g, n) => { const r = aleas(9); g.fillStyle = "#8C857B"; g.fillRect(0, 0, n, n); for (let y = 0; y < n; y += 64) for (let x = (y / 64) % 2 ? -32 : 0; x < n; x += 64) { const v = 165 + Math.floor(r() * 35); g.fillStyle = `rgb(${v},${v - 6},${v - 14})`; g.fillRect(x + 3, y + 3, 58, 58); } }, taille),
+  tuiles: (taille) => texture((g, n) => { const r = aleas(13); g.fillStyle = "#6E3420"; g.fillRect(0, 0, n, n); for (let y = 0; y < n; y += 32) for (let x = (y / 32) % 2 ? -32 : 0; x < n; x += 64) { const v = Math.floor(r() * 30); const grad = g.createLinearGradient(0, y, 0, y + 32); grad.addColorStop(0, `rgb(${178 + v},${88 + v / 2},52)`); grad.addColorStop(1, `rgb(${138 + v},${62 + v / 2},38)`); g.fillStyle = grad; g.fillRect(x + 2, y + 1, 60, 30); g.fillStyle = "rgba(60,25,12,.35)"; g.fillRect(x + 2, y + 28, 60, 3); } }, taille),
+  bois: (taille) => texture((g, n) => { g.fillStyle = "#8A5A35"; g.fillRect(0, 0, n, n); const r = aleas(17); for (let i = 0; i < 90; i++) { g.strokeStyle = `rgba(${60 + r() * 40},${35 + r() * 20},15,.35)`; g.lineWidth = 1 + r() * 2; g.beginPath(); const x = r() * n; g.moveTo(x, 0); g.bezierCurveTo(x + 8, n / 3, x - 8, (2 * n) / 3, x + 4, n); g.stroke(); } }, taille),
 };
+
+// Canaux de matière linéaires : les joints restent en creux et les surfaces
+// présentent un relief léger. Les cartes couleur seules restent en sRGB.
+function reliefMatiere(couleur, rugosite = 0.8, leger = false) {
+  const source = couleur.image, n = source.width;
+  const hauteur = document.createElement("canvas"), rugueux = document.createElement("canvas");
+  hauteur.width = hauteur.height = n; rugueux.width = rugueux.height = leger ? 1 : n;
+  const gh = hauteur.getContext("2d"), gr = rugueux.getContext("2d");
+  // Filtres natifs : aucune lecture ni boucle JavaScript sur les pixels.
+  // Le contraste garde les joints en creux, même sur un appareil peu puissant.
+  gh.filter = "grayscale(1) contrast(1.1)"; gh.drawImage(source, 0, 0);
+  const gris = Math.round(rugosite * 255); gr.fillStyle = `rgb(${gris},${gris},${gris})`; gr.fillRect(0, 0, rugueux.width, rugueux.height);
+  if (!leger) { gr.filter = "grayscale(1) invert(1)"; gr.globalAlpha = 0.15; gr.drawImage(source, 0, 0); }
+  const carte = (canvas) => { const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.colorSpace = THREE.NoColorSpace; return t; };
+  return { bumpMap: carte(hauteur), roughnessMap: carte(rugueux) };
+}
+
+// Le profil léger évite les six rendus du ciel physique à 256px de côté.
+// Une équirectangulaire de 256×128 produit une PMREM de côté 64 dans Three r160.
+function environnementLeger(direction) {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 128;
+  const g = c.getContext("2d"), fond = g.createLinearGradient(0, 0, 0, 128);
+  fond.addColorStop(0, "#8FB8D7"); fond.addColorStop(0.48, "#E0E6E6"); fond.addColorStop(0.52, "#B9B49D"); fond.addColorStop(1, "#77795F");
+  g.fillStyle = fond; g.fillRect(0, 0, 256, 128);
+  const x = ((Math.atan2(direction.z, direction.x) / (2 * Math.PI) + 1) % 1) * 256, y = Math.acos(direction.y) / Math.PI * 128;
+  const soleil = g.createRadialGradient(x, y, 1, x, y, 20); soleil.addColorStop(0, "rgba(255,247,222,.9)"); soleil.addColorStop(1, "rgba(255,247,222,0)");
+  g.fillStyle = soleil; g.fillRect(0, 0, 256, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping;
+  return t;
+}
+
+function boiteSouple(sx, sy, sz, rayon = 0.045, segments = 4) {
+  const g = new THREE.BoxGeometry(sx, sy, sz, segments, segments, segments), p = g.attributes.position, normales = g.attributes.normal;
+  const r = Math.min(rayon, sx / 3, sy / 3, sz / 3), coeur = new THREE.Vector3(), sommet = new THREE.Vector3(), normale = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    sommet.fromBufferAttribute(p, i);
+    coeur.set(THREE.MathUtils.clamp(sommet.x, -sx / 2 + r, sx / 2 - r), THREE.MathUtils.clamp(sommet.y, -sy / 2 + r, sy / 2 - r), THREE.MathUtils.clamp(sommet.z, -sz / 2 + r, sz / 2 - r));
+    normale.copy(sommet).sub(coeur).normalize(); sommet.copy(coeur).addScaledVector(normale, r);
+    p.setXYZ(i, sommet.x, sommet.y, sommet.z); normales.setXYZ(i, normale.x, normale.y, normale.z);
+  }
+  return g;
+}
 
 // Boîte dont les coordonnées de texture suivent les dimensions réelles (texture à l'échelle, sans étirement)
 function boiteUV(sx, sy, sz, echelle) {
@@ -36,8 +83,41 @@ function boiteUV(sx, sy, sz, echelle) {
   return g;
 }
 
+// Les volumes immobiles partageant une matière sont regroupés sans changer
+// leurs positions, normales ou UV. Toit et étage gardent chacun leur groupe
+// pour rester amovibles. Le verre conserve son tri de transparence séparé.
+function fusionnerVolumes(parent) {
+  const lots = new Map();
+  for (const o of parent.children) {
+    if (!o.isMesh || o.isInstancedMesh || o.geometry.type !== "BoxGeometry" || o.material.transparent || Array.isArray(o.material)) continue;
+    const cle = `${o.material.uuid}:${o.castShadow}:${o.receiveShadow}`;
+    if (!lots.has(cle)) lots.set(cle, []); lots.get(cle).push(o);
+  }
+  let reduction = 0;
+  for (const objets of lots.values()) {
+    if (objets.length < 3) continue;
+    const nombre = objets.reduce((s, o) => s + (o.geometry.index?.count || o.geometry.attributes.position.count), 0);
+    const positions = new Float32Array(nombre * 3), normales = new Float32Array(nombre * 3), uvs = new Float32Array(nombre * 2);
+    const p = new THREE.Vector3(), n = new THREE.Vector3(), matriceNormale = new THREE.Matrix3(); let curseur = 0;
+    for (const o of objets) {
+      o.updateMatrix(); matriceNormale.getNormalMatrix(o.matrix);
+      const g = o.geometry, index = g.index, total = index?.count || g.attributes.position.count;
+      for (let i = 0; i < total; i++, curseur++) {
+        const v = index ? index.getX(i) : i;
+        p.fromBufferAttribute(g.attributes.position, v).applyMatrix4(o.matrix); n.fromBufferAttribute(g.attributes.normal, v).applyMatrix3(matriceNormale).normalize();
+        positions.set([p.x, p.y, p.z], curseur * 3); normales.set([n.x, n.y, n.z], curseur * 3);
+        uvs.set([g.attributes.uv.getX(v), g.attributes.uv.getY(v)], curseur * 2);
+      }
+      parent.remove(o); g.dispose();
+    }
+    const geometrie = new THREE.BufferGeometry(); geometrie.setAttribute("position", new THREE.BufferAttribute(positions, 3)); geometrie.setAttribute("normal", new THREE.BufferAttribute(normales, 3)); geometrie.setAttribute("uv", new THREE.BufferAttribute(uvs, 2)); geometrie.computeBoundingSphere();
+    const volume = new THREE.Mesh(geometrie, objets[0].material); volume.castShadow = objets[0].castShadow; volume.receiveShadow = objets[0].receiveShadow; parent.add(volume); reduction += objets.length - 1;
+  }
+  return reduction;
+}
+
 // ---------- Aménagement intérieur (rendu seulement : le plan 2D ne change pas) ----------
-function meubler(scene, M, boite, niveaux, H, film) {
+function meubler(scene, M, boite, niveaux, H, film, leger = false) {
   const m = (o) => new THREE.MeshStandardMaterial({ roughness: 0.8, ...o });
   const A = {
     lin: m({ color: 0xD9CDB8, roughness: 0.95 }), velours: m({ color: 0x2F5D62, roughness: 0.9 }), coussin1: m({ color: 0xC8783E, roughness: 0.95 }), coussin2: m({ color: 0xE9D8A6, roughness: 0.95 }),
@@ -48,7 +128,8 @@ function meubler(scene, M, boite, niveaux, H, film) {
     terre: m({ color: 0xB4643C, roughness: 0.9 }), plante: m({ color: 0x2E6B34, roughness: 0.8 }), plante2: m({ color: 0x4F8F3A, roughness: 0.8 }),
     abatjour: new THREE.MeshStandardMaterial({ color: 0xFFF1D6, emissive: 0xFFD9A0, emissiveIntensity: 0.9, roughness: 0.9 }), spot: new THREE.MeshStandardMaterial({ color: 0xFFFFFF, emissive: 0xFFF0D8, emissiveIntensity: 1.2 }),
   };
-  const b = (sx, sy, sz, x, y, z, mat, ombre = false) => boite(sx, sy, sz, x, y, z, mat, scene, ombre);
+  const souples = new Set([A.lin, A.velours, A.drap, A.couette, A.couette2]);
+  const b = (sx, sy, sz, x, y, z, mat, ombre = false) => { const objet = boite(sx, sy, sz, x, y, z, mat, scene, ombre); if (souples.has(mat)) { objet.geometry.dispose(); objet.geometry = boiteSouple(sx, sy, sz, 0.045, leger ? 2 : 4); } return objet; };
   const plante = (x, y, z, t = 1) => {
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.17 * t, 0.13 * t, 0.36 * t, 14), A.terre); pot.position.set(x, y + 0.18 * t, z); scene.add(pot);
     for (const [dx, dy, dz, r] of [[0, 0.62, 0, 0.26], [0.12, 0.85, 0.05, 0.2], [-0.1, 0.8, -0.06, 0.22], [0.02, 1.05, -0.02, 0.17]]) { const f = new THREE.Mesh(new THREE.IcosahedronGeometry(r * t, 1), dy > 0.8 ? A.plante2 : A.plante); f.position.set(x + dx * t, y + dy * t, z + dz * t); scene.add(f); }
@@ -73,10 +154,10 @@ function meubler(scene, M, boite, niveaux, H, film) {
     const contient = (q, x, z, marge = 0.05) => q && x >= q.x + marge && x <= q.x + q.w - marge && z >= q.y + marge && z <= q.y + q.h - marge;
     // Plafonniers : un point lumineux chaud par pièce de vie (sans ombre, pour rester fluide)
     for (const q of pl.pieces.filter((x) => ["salon", "cuisine", "chambre", "detente", "bureau"].includes(x.type))) {
-      if (lumieres < 6 && !film) { const l = new THREE.PointLight(0xFFD7A3, q.type === "salon" ? 14 : 8, Math.max(q.w, q.h) * 1.6, 2); l.position.set(q.x + q.w / 2, base + H - 0.35, q.y + q.h / 2); scene.add(l); lumieres++; }
+      if (lumieres < (leger ? 1 : film ? 2 : 4)) { const l = new THREE.PointLight(0xFFF0D8, q.type === "salon" ? 20 : 11, Math.max(q.w, q.h) * 1.6, 2); l.position.set(q.x + q.w / 2, base + H - 0.35, q.y + q.h / 2); scene.add(l); lumieres++; }
       const d = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.03, 20), A.spot); d.position.set(q.x + q.w / 2, base + H - 0.02, q.y + q.h / 2); scene.add(d);
     }
-    for (const o of pl.meubles) {
+    for (const o of pl.meubles || []) {
       const q = dans(o), cx = o.x + o.w / 2, cz = o.y + o.h / 2, y = base;
       if (o.type === "canape") {
         // Canapé : assise, dossier, accoudoirs, coussins ; table basse, tapis, lampadaire, plante
@@ -158,13 +239,13 @@ function meubler(scene, M, boite, niveaux, H, film) {
 
 // ---------- Mise en situation : vrai quartier (imagerie satellite Esri au sol), rue, trottoirs et maisons voisines ----------
 // Les voisins sont des volumes illustratifs ; seule l'imagerie du sol est réelle.
-function construireQuartier(scene, M, boite, { gauche, droite, avant, arriere, lat, lon }) {
+function construireQuartier(scene, M, boite, { gauche, droite, avant, arriere, lat, lon, leger, notifier, chargements }) {
   const r = aleas(Math.abs(Math.round((lat || 1) * 1000 + (lon || 1) * 7)) + 11);
   scene.fog = new THREE.Fog(0xC9D6E2, 140, 430);
   // Sol satellite : 5 × 5 tuiles au zoom 18 (≈ 750 m de côté), centrées sur le quartier
-  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+  if (Number.isFinite(lat) && Math.abs(lat) < 85 && Number.isFinite(lon) && Math.abs(lon) <= 180) {
     const Z = 18, n = 2 ** Z, rad = (lat * Math.PI) / 180, xf = ((lon + 180) / 360) * n, yf = ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n;
-    const N = 5, x0 = Math.floor(xf) - 2, y0 = Math.floor(yf) - 2, mTuile = (156543.03 * Math.cos(rad)) / n * 256, cote = N * mTuile;
+    const N = leger ? 3 : 5, demi = Math.floor(N / 2), x0 = Math.floor(xf) - demi, y0 = Math.floor(yf) - demi, mTuile = (156543.03 * Math.cos(rad)) / n * 256, cote = N * mTuile;
     const c = document.createElement("canvas"); c.width = c.height = N * 256;
     const g = c.getContext("2d"); g.fillStyle = "#7d7a68"; g.fillRect(0, 0, c.width, c.height);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
@@ -174,7 +255,8 @@ function construireQuartier(scene, M, boite, { gauche, droite, avant, arriere, l
     plaque.rotation.x = -Math.PI / 2; plaque.position.set((gauche + droite) / 2 + cote / 2 - cx, -0.03, (avant + arriere) / 2 + cote / 2 - cy); plaque.receiveShadow = true; scene.add(plaque);
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const im = new Image(); im.crossOrigin = "anonymous";
-      im.onload = () => { g.drawImage(im, i * 256, j * 256); tex.needsUpdate = true; };
+      chargements.push(im);
+      im.onload = () => { g.drawImage(im, i * 256, j * 256); tex.needsUpdate = true; notifier(); };
       im.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${Z}/${y0 + j}/${x0 + i}`;
     }
   }
@@ -212,56 +294,86 @@ function construireQuartier(scene, M, boite, { gauche, droite, avant, arriere, l
       const f = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6 + r() * 0.8, 1), r() < 0.5 ? M.feuille : M.feuille2); f.position.set(ax, 3.4, az); f.castShadow = proche; scene.add(f); }
   };
   const xm = (gauche + droite) / 2, zm = (avant + arriere) / 2, pas = lotW + 1.2;
-  for (const k of [-3, -2, -1, 1, 2, 3]) voisin(xm + k * pas, zm, 1); // même côté de la rue
-  for (const k of [-3, -2, -1, 1, 2, 3]) voisin(xm + k * pas, zRue - 4.25 - 0.75 - lotP / 2, -1); // en face (lot du milieu laissé libre : il dégage la vue)
-  for (const k of [-2, -1, 0, 1, 2]) voisin(xm + k * pas, arriere + 1.2 + lotP / 2, 1); // derrière
+  for (const k of leger ? [-1, 1] : [-3, -2, -1, 1, 2, 3]) voisin(xm + k * pas, zm, 1); // même côté de la rue
+  for (const k of leger ? [-1, 1] : [-3, -2, -1, 1, 2, 3]) voisin(xm + k * pas, zRue - 4.25 - 0.75 - lotP / 2, -1); // en face (lot du milieu laissé libre : il dégage la vue)
+  for (const k of leger ? [-1, 0, 1] : [-2, -1, 0, 1, 2]) voisin(xm + k * pas, arriere + 1.2 + lotP / 2, 1); // derrière
 }
 
 export { THREE };
+// Cadrages partagés par les images HD et la vérification locale. La façade est
+// photographiée depuis la cour, pour éviter que le portail masque la maison.
+export function cadragesMaison(plan, limites) {
+  const W = plan.largeur, D = plan.profondeur, R = Math.max(W, D), H = plan.hauteur || 3, T = plan.terrasse;
+  const V = (x, y, z) => new THREE.Vector3(x, y, z), C = V(W / 2, SOL + H * (plan.etage ? 0.9 : 0.55), D / 2);
+  const salon = plan.pieces.find((q) => q.type === "salon") || plan.pieces[0];
+  const courZ = limites?.avant !== undefined ? limites.avant + 1.2 : (T?.y || 0) - 5;
+  return [
+    { nom: "vue-ensemble", toit: true, cam: V(W / 2 - R * 1.3, R * 0.7 + (plan.etage ? 5 : 3), D / 2 - R * 1.65), cible: C, fov: 38 },
+    { nom: "facade", toit: true, cam: V(W / 2 - W * 0.36, SOL + 1.75 + (plan.etage ? 0.9 : 0), courZ), cible: V(W / 2, SOL + H * (plan.etage ? 1 : 0.6), D * 0.12), fov: 62 },
+    { nom: "terrasse", toit: true, cam: V(T ? T.x + T.w * 0.1 : W * 0.12, SOL + 1.65, T ? T.y - 2.2 : -3.6), cible: V(salon.x + salon.w / 2, SOL + 1.4, 0.35), fov: 58 },
+    { nom: "interieur", toit: false, niveau: 0, cam: V(W / 2 - R * 0.18, SOL + H + R * 1.15, D / 2 + R * 0.5), cible: V(W / 2, SOL, D / 2), fov: 46 },
+    ...(plan.etage ? [{ nom: "interieur-etage", toit: false, niveau: 1, cam: V(W / 2 - R * 0.18, SOL + H * 2 + 0.25 + R * 1.15, D / 2 + R * 0.5), cible: V(W / 2, SOL + H + 0.25, D / 2), fov: 46 }] : []),
+  ];
+}
 export function afficher3D(conteneur, plan, options = {}) {
   const W = plan.largeur, D = plan.profondeur, H = plan.hauteur || 3, T = plan.terrasse, compact = Boolean(options.transparent);
+  const mouvementReduit = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  const leger = options.qualite === "legere" || (!options.film && (navigator.deviceMemory <= 4 || window.matchMedia?.("(max-width: 700px)").matches));
   const toiture = options.toiture || plan.toiture || "4pans";
+  const style = STYLES[plan.style] || { enduit: 0xF5EFE3, accent: 0x343B3C };
   const scene = new THREE.Scene();
-  const renderer = new THREE.WebGLRenderer({ antialias: !options.film, alpha: compact, preserveDrawingBuffer: Boolean(options.film) }); // tournage : calcul processeur, on allège
-  renderer.setPixelRatio(options.film ? 1 : Math.min(2, window.devicePixelRatio || 1));
+  const chargements = []; let rafRendering = () => {};
+  const renderer = new THREE.WebGLRenderer({ antialias: !leger && Boolean(!options.film || options.photo), alpha: compact, powerPreference: "low-power", preserveDrawingBuffer: Boolean(options.film) });
+  renderer.setPixelRatio(options.film ? 1 : Math.min(leger ? 1.25 : 1.75, window.devicePixelRatio || 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.72;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   conteneur.innerHTML = ""; conteneur.appendChild(renderer.domElement);
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 2000);
+  renderer.domElement.setAttribute("aria-label", "Maquette 3D de votre maison. Glissez pour tourner et pincez pour zoomer.");
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.12, 1000);
   const quartier = !options.transparent && options.quartier;
+  if (quartier) renderer.domElement.setAttribute("aria-description", "Le sol utilise une imagerie satellite. Les bâtiments voisins et la parcelle sont une mise en situation indicative.");
   const controles = new OrbitControls(camera, renderer.domElement);
-  controles.enableDamping = true; controles.maxPolarAngle = Math.PI * 0.49;
-  if (options.auto) { controles.autoRotate = true; controles.autoRotateSpeed = 0.7; controles.enableZoom = false; controles.enablePan = false; }
+  controles.enableDamping = true; controles.dampingFactor = 0.085; controles.maxPolarAngle = Math.PI * 0.485;
+  controles.zoomSpeed = 0.8; controles.panSpeed = 0.6;
+  if (options.auto) { controles.autoRotate = !mouvementReduit?.matches; controles.autoRotateSpeed = 0.45; controles.enableZoom = false; controles.enablePan = false; }
 
   // Environnement (reflets doux) + ciel physique + soleil de fin d'après-midi
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
-  const soleilDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(50), THREE.MathUtils.degToRad(115));
-  if (!compact) {
-    const ciel = new Sky(); ciel.scale.setScalar(1500); scene.add(ciel);
-    const u = ciel.material.uniforms; u.turbidity.value = 6; u.rayleigh.value = 1.6; u.mieCoefficient.value = 0.004; u.mieDirectionalG.value = 0.8; u.sunPosition.value.copy(soleilDir);
-  }
-  scene.add(new THREE.HemisphereLight(0xDDEBFF, 0x4A5530, 0.45));
-  const soleil = new THREE.DirectionalLight(0xFFE6C4, 2.6);
+  const soleilDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(52), THREE.MathUtils.degToRad(225));
+  const ciel = new Sky(); ciel.scale.setScalar(450);
+  const u = ciel.material.uniforms; u.turbidity.value = 2.6; u.rayleigh.value = 1.25; u.mieCoefficient.value = 0.003; u.mieDirectionalG.value = 0.78; u.sunPosition.value.copy(soleilDir);
+  const atmosphere = new THREE.Scene(); atmosphere.add(ciel);
+  const fondLeger = leger ? environnementLeger(soleilDir) : null;
+  const environnement = leger ? pmrem.fromEquirectangular(fondLeger) : pmrem.fromScene(atmosphere, 0.08, 0.1, 1000);
+  scene.environment = environnement.texture;
+  if (!compact) { if (leger) scene.background = new THREE.Color(0xD3E0E6); else scene.add(ciel); }
+  if (!quartier && !compact) scene.fog = new THREE.FogExp2(0xdde3e4, 0.003);
+  scene.add(new THREE.HemisphereLight(0xDCE8F3, 0x8B785D, 0.35));
+  const soleil = new THREE.DirectionalLight(0xFFF0DA, 3.1);
   soleil.position.copy(soleilDir).multiplyScalar(60).add(new THREE.Vector3(W / 2, 0, D / 2)); soleil.target.position.set(W / 2, 0, D / 2);
-  soleil.castShadow = true; soleil.shadow.mapSize.set(options.film ? 1024 : 2048, options.film ? 1024 : 2048); soleil.shadow.bias = -0.0004; soleil.shadow.normalBias = 0.02;
-  const portee = Math.max(W, D) + 14; Object.assign(soleil.shadow.camera, { left: -portee, right: portee, top: portee, bottom: -portee, near: 1, far: 160 });
+  soleil.castShadow = true; const tailleOmbre = leger || (options.film && !options.photo) ? 1024 : 2048;
+  soleil.shadow.mapSize.set(tailleOmbre, tailleOmbre); soleil.shadow.bias = -0.00008; soleil.shadow.normalBias = 0.025; soleil.shadow.radius = 3;
+  const portee = Math.max(W, D) * 0.75 + 7; Object.assign(soleil.shadow.camera, { left: -portee, right: portee, top: portee, bottom: -portee, near: 1, far: 130 });
+  soleil.shadow.camera.updateProjectionMatrix();
   scene.add(soleil, soleil.target);
 
   // Matières
-  const tex = Object.fromEntries(Object.entries(TEX).map(([k, f]) => [k, f()]));
+  const tex = Object.fromEntries(Object.entries(TEX).map(([k, f]) => [k, f(leger ? 256 : 512)]));
+  const reliefs = Object.fromEntries(Object.entries(tex).map(([k, t]) => [k, reliefMatiere(t, k === "carrelage" ? 0.5 : k === "parquet" || k === "bois" ? 0.72 : 0.95, leger)]));
+  for (const t of Object.values(tex)) t.anisotropy = Math.min(leger ? 2 : 8, renderer.capabilities.getMaxAnisotropy());
   const mat = (o) => new THREE.MeshStandardMaterial({ roughness: 0.9, ...o });
   const M = {
-    enduit: mat({ map: tex.enduit }), interieur: mat({ color: 0xF2EADF }), pierre: mat({ map: tex.pierre, roughness: 0.95 }),
-    carrelage: mat({ map: tex.carrelage, roughness: 0.35 }), parquet: mat({ map: tex.parquet, roughness: 0.55 }), dallage: mat({ map: tex.paves, roughness: 0.85 }),
-    herbe: mat({ map: tex.herbe }), paves: mat({ map: tex.paves }), tuiles: mat({ map: tex.tuiles, roughness: 0.75, side: THREE.DoubleSide }),
-    bois: mat({ map: tex.bois, roughness: 0.6 }), alu: mat({ color: 0x2F3437, roughness: 0.35, metalness: 0.7 }), blanc: mat({ color: 0xFAFAF7 }),
-    verre: new THREE.MeshStandardMaterial({ color: 0x9FC6DA, roughness: 0.04, metalness: 0.9, transparent: true, opacity: 0.45, envMapIntensity: 1.4 }),
+    enduit: mat({ color: style.enduit, map: tex.enduit, ...reliefs.enduit, bumpScale: 0.012 }), interieur: mat({ color: 0xF0EEE7 }), pierre: mat({ map: tex.pierre, ...reliefs.pierre, bumpScale: 0.06 }),
+    carrelage: mat({ map: tex.carrelage, ...reliefs.carrelage, bumpScale: 0.008 }), parquet: mat({ map: tex.parquet, ...reliefs.parquet, bumpScale: 0.009 }), dallage: mat({ map: tex.paves, ...reliefs.paves, bumpScale: 0.025 }),
+    herbe: mat({ map: tex.herbe, ...reliefs.herbe, bumpScale: 0.035 }), paves: mat({ map: tex.paves, ...reliefs.paves, bumpScale: 0.025 }), tuiles: mat({ map: tex.tuiles, ...reliefs.tuiles, bumpScale: 0.045, side: THREE.DoubleSide }),
+    bois: mat({ map: tex.bois, ...reliefs.bois, bumpScale: 0.012 }), alu: mat({ color: style.accent, roughness: 0.3, metalness: 0.75 }), blanc: mat({ color: 0xEFEFEA }),
+    verre: new (leger ? THREE.MeshStandardMaterial : THREE.MeshPhysicalMaterial)({ color: 0xD8E4E2, roughness: 0.07, metalness: 0, transparent: true, opacity: 0.25, depthWrite: false, ...(leger ? {} : { ior: 1.5, clearcoat: 1, clearcoatRoughness: 0.06 }), envMapIntensity: 0.8, side: THREE.DoubleSide }),
     rive: mat({ color: 0xF4F1EA }), beton: mat({ color: 0xC9C3B8 }), sombre: mat({ color: 0x2B2B2B, roughness: 0.5, metalness: 0.6 }),
-    feuille: mat({ color: 0x3F7A2A, roughness: 0.8 }), feuille2: mat({ color: 0x5C9A35, roughness: 0.8 }), tronc: mat({ color: 0x6E5034 }), fleur: mat({ color: 0xD9467A }), fleur2: mat({ color: 0xF2B233 }),
+    feuille: mat({ color: 0x465D35, roughness: 0.95 }), feuille2: mat({ color: 0x617447, roughness: 0.95 }), tronc: mat({ color: 0x6E5034 }), fleur: mat({ color: 0xA7616D, roughness: 0.95 }), fleur2: mat({ color: 0xBF9B50, roughness: 0.95 }),
     tissu: mat({ color: 0x55606E }), drap: mat({ color: 0xF1F1EE }),
   };
-  const groupeToit = new THREE.Group();
+  const groupeToit = new THREE.Group(), groupeEtage = new THREE.Group(); scene.add(groupeEtage);
   const boite = (sx, sy, sz, x, y, z, m, parent = scene, ombre = true, echelle = 1) => {
     const [a, b, c] = [Math.max(sx, 0.01), Math.max(sy, 0.01), Math.max(sz, 0.01)];
     const o = new THREE.Mesh(m.map ? boiteUV(a, b, c, echelle) : new THREE.BoxGeometry(a, b, c), m);
@@ -270,12 +382,12 @@ export function afficher3D(conteneur, plan, options = {}) {
 
   // ---------- Terrain, clôture et portail ----------
   const avant = -(T ? T.h : 0) - (compact ? 3 : 7), arriere = D + (compact ? 2.5 : 4), gauche = compact ? -2.5 : -4, droite = W + (compact ? 2.5 : 4);
-  const lS = compact ? droite - gauche + 6 : quartier ? droite - gauche : 400, pS = compact ? arriere - avant + 6 : quartier ? arriere - avant : 400;
+  const lS = compact ? droite - gauche + 6 : quartier ? droite - gauche : 1000, pS = compact ? arriere - avant + 6 : quartier ? arriere - avant : 1000;
   const sol = new THREE.Mesh(new THREE.PlaneGeometry(lS, pS), M.herbe);
   const uvS = sol.geometry.attributes.uv; for (let i = 0; i < uvS.count; i++) uvS.setXY(i, (uvS.getX(i) * lS) / 3, (uvS.getY(i) * pS) / 3);
   sol.rotation.x = -Math.PI / 2; sol.position.set(quartier ? (gauche + droite) / 2 : W / 2, quartier ? 0.02 : 0, (avant + arriere) / 2); sol.receiveShadow = true; scene.add(sol);
   const xm = (gauche + droite) / 2;
-  if (quartier) construireQuartier(scene, M, boite, { gauche, droite, avant, arriere, lat: Number(quartier.lat), lon: Number(quartier.lon) });
+  if (quartier) construireQuartier(scene, M, boite, { gauche, droite, avant, arriere, lat: Number(quartier.lat), lon: Number(quartier.lon), leger, notifier: () => rafRendering(), chargements });
   if (!compact) {
     const hC = 1.9, e = 0.2, porte = 3.6;
     for (const [sx, sz, x, z] of [[droite - gauche, e, xm, arriere], [e, arriere - avant, gauche, (avant + arriere) / 2], [e, arriere - avant, droite, (avant + arriere) / 2], [xm - porte / 2 - gauche, e, (gauche + xm - porte / 2) / 2, avant], [droite - xm - porte / 2, e, (droite + xm + porte / 2) / 2, avant]]) {
@@ -289,9 +401,9 @@ export function afficher3D(conteneur, plan, options = {}) {
 
   // ---------- Maison : soubassement en pierre, puis chaque niveau (sols, murs, menuiseries) ----------
   boite(W + 0.06, SOL, D + 0.06, W / 2, SOL / 2, D / 2, M.pierre, scene, true, 1.5);
-  const construireNiveau = (pl, base) => {
+  const construireNiveau = (pl, base, parent = scene) => {
   const SOLS = { douche: M.carrelage, sdb: M.carrelage, wc: M.carrelage, cuisine: M.carrelage, buanderie: M.carrelage, chambre: M.parquet, bureau: M.parquet };
-  for (const q of pl.pieces) boite(q.w, 0.02, q.h, q.x + q.w / 2, base + 0.01, q.y + q.h / 2, SOLS[q.type] || M.carrelage, scene, false, 1.2);
+  for (const q of pl.pieces) if (!(base > SOL && q.type === "escalier")) boite(q.w, 0.02, q.h, q.x + q.w / 2, base + 0.01, q.y + q.h / 2, SOLS[q.type] || M.carrelage, parent, false, 1.2);
 
   const exterieur = (w) => (w.ext ? (w.y1 === w.y2 ? (w.y1 === 0 ? -1 : 1) : (w.x1 === 0 ? -1 : 1)) : 0); // sens de la façade
   const trousDe = (w) => {
@@ -301,7 +413,7 @@ export function afficher3D(conteneur, plan, options = {}) {
   const morceau = (h, fixe, a, b, y0, y1, ep, m, decal = 0, ech = 2) => {
     if (b - a < 0.01 || y1 - y0 < 0.01) return null;
     const L = b - a, c = (a + b) / 2, y = (y0 + y1) / 2;
-    return h ? boite(L, y1 - y0, ep, c, y, fixe + decal, m, scene, true, ech) : boite(ep, y1 - y0, L, fixe + decal, y, c, m, scene, true, ech);
+    return h ? boite(L, y1 - y0, ep, c, y, fixe + decal, m, parent, true, ech) : boite(ep, y1 - y0, L, fixe + decal, y, c, m, parent, true, ech);
   };
   const haut = base + H;
   for (const w of pl.murs) {
@@ -312,37 +424,54 @@ export function afficher3D(conteneur, plan, options = {}) {
     for (const o of trous) {
       const a = o.centre - o.largeur / 2, b = o.centre + o.largeur / 2;
       morceau(h, fixe, c, a, base, haut, ep, m);
-      const bas = o.type === "fenetre" ? base + (o.allege || 1) : base, hautO = o.type === "fenetre" ? bas + (o.hauteur || 1.2) : base + (o.type === "baie" ? 2.3 : 2.15);
+      const bas = o.type === "fenetre" ? base + (o.allege ?? 1) : base, hautO = Math.min(haut, o.type === "fenetre" ? bas + (o.hauteur ?? 1.2) : base + (o.type === "baie" ? 2.3 : o.type === "passage" ? 2.2 : 2.15));
       morceau(h, fixe, a, b, base, bas, ep, m); morceau(h, fixe, a, b, hautO, haut, ep, m);
       if (o.type === "fenetre" || o.type === "baie") {
-        const cadre = 0.06, prof = 0.07;
+        const cadre = 0.055, prof = 0.085;
         morceau(h, fixe, a, b, bas, bas + cadre, prof, M.alu); morceau(h, fixe, a, b, hautO - cadre, hautO, prof, M.alu);
         morceau(h, fixe, a, a + cadre, bas, hautO, prof, M.alu); morceau(h, fixe, b - cadre, b, bas, hautO, prof, M.alu);
         const nb = o.largeur > 1.5 ? 3 : o.largeur > 0.8 ? 2 : 1;
         for (let i = 1; i < nb; i++) { const x = a + (i * (b - a)) / nb; morceau(h, fixe, x - 0.025, x + 0.025, bas, hautO, prof, M.alu); }
-        morceau(h, fixe, a + cadre, b - cadre, bas + cadre, hautO - cadre, 0.02, M.verre);
+        for (let i = 0; i < nb; i++) {
+          const bordG = a + (i * (b - a)) / nb + cadre, bordD = a + ((i + 1) * (b - a)) / nb - cadre;
+          const vitre = morceau(h, fixe, bordG, bordD, bas + cadre, hautO - cadre, 0.008, M.verre); if (vitre) { vitre.castShadow = false; vitre.renderOrder = 2; }
+        }
+        // Joints et poignée : proportions identiques aux baies du plan.
+        morceau(h, fixe, b - cadre - 0.055, b - cadre - 0.025, bas + (hautO - bas) * 0.48, bas + (hautO - bas) * 0.48 + 0.15, 0.12, M.alu);
+        if (ext) {
+          morceau(h, fixe, a - 0.025, a + 0.025, bas, hautO, ep + 0.015, M.rive);
+          morceau(h, fixe, b - 0.025, b + 0.025, bas, hautO, ep + 0.015, M.rive);
+        }
         if (ext && o.type === "fenetre") { morceau(h, fixe, a - 0.05, b + 0.05, bas - 0.06, bas, ep + 0.08, M.beton, ext * 0.04); morceau(h, fixe, a - 0.08, b + 0.08, hautO, hautO + 0.12, ep + 0.04, M.rive, ext * 0.02); }
       } else if (o.type === "entree" || (ext && o.type === "porte")) {
         morceau(h, fixe, a + 0.03, b - 0.03, base, hautO, 0.06, M.bois);
         morceau(h, fixe, b - 0.14, b - 0.08, base + 1.0, base + 1.05, 0.12, M.sombre);
       }
+      // Plinthes interrompues à chaque passage, sans modifier les murs.
+      if (c < a) morceau(h, fixe, c, a, base + 0.02, base + 0.11, ep + 0.025, M.rive);
       c = b;
     }
     morceau(h, fixe, c, a1, base, haut, ep, m);
+    morceau(h, fixe, c, a1, base + 0.02, base + 0.11, ep + 0.025, M.rive);
   }
     // Escalier en U (deux volées de marches, palier au fond)
     for (const q of base === SOL ? pl.pieces.filter((x) => x.type === "escalier") : []) {
-      const v = (q.w - 0.2) / 2, n = 9, hm = H / 2 / n, pas = Math.min(0.28, (q.h - 1.2) / n);
-      for (let k = 0; k < n; k++) { boite(v, hm * (k + 1), pas, q.x + 0.1 + v / 2, base + (hm * (k + 1)) / 2, q.y + 0.1 + k * pas + pas / 2, M.beton, scene, true); boite(v, hm * (k + 1), pas, q.x + 0.1 + v * 1.5, base + H / 2 + (hm * (k + 1)) / 2, q.y + 0.1 + (n - 1 - k) * pas + pas / 2, M.beton, scene, true); }
-      boite(q.w - 0.2, 0.15, 1.1, q.x + q.w / 2, base + H / 2, q.y + q.h - 0.6, M.beton, scene, true);
+      const v = (q.w - 0.2) / 2, n = 9, demiH = (H + 0.25) / 2, hm = demiH / n, pas = (q.h - 1.2) / n;
+      for (let k = 0; k < n; k++) { boite(v, hm * (k + 1), pas, q.x + 0.1 + v / 2, base + (hm * (k + 1)) / 2, q.y + 0.1 + k * pas + pas / 2, M.beton, parent, true); boite(v, hm * (k + 1), pas, q.x + 0.1 + v * 1.5, base + demiH + (hm * (k + 1)) / 2, q.y + 0.1 + (n - 1 - k) * pas + pas / 2, M.beton, parent, true); }
+      boite(q.w - 0.2, 0.15, 1.1, q.x + q.w / 2, base + demiH - 0.075, q.y + q.h - 0.55, M.beton, parent, true);
     }
     return haut;
   };
   const hautRDC = construireNiveau(plan, SOL);
   let haut = hautRDC;
   if (plan.etage) {
-    boite(W + 0.1, 0.25, D + 0.1, W / 2, hautRDC + 0.125, D / 2, M.blanc); // dalle entre les niveaux
-    haut = construireNiveau({ ...plan.etage, pieces: plan.etage.pieces }, hautRDC + 0.25);
+    const tr = plan.etage.pieces.find((q) => q.type === "escalier");
+    const dalle = (x, z, w, d) => { if (w > 0.01 && d > 0.01) boite(w, 0.25, d, x + w / 2, hautRDC + 0.125, z + d / 2, M.blanc, groupeEtage); };
+    if (tr) { // La trémie suit exactement la pièce escalier du plan.
+      dalle(-0.05, -0.05, tr.x + 0.05, D + 0.1); dalle(tr.x + tr.w, -0.05, W + 0.05 - tr.x - tr.w, D + 0.1);
+      dalle(tr.x, -0.05, tr.w, tr.y + 0.05); dalle(tr.x, tr.y + tr.h, tr.w, D + 0.05 - tr.y - tr.h);
+    } else dalle(-0.05, -0.05, W + 0.1, D + 0.1);
+    haut = construireNiveau(plan.etage, hautRDC + 0.25, groupeEtage);
   }
   boite(W + 0.1, 0.25, D + 0.1, W / 2, haut + 0.125, D / 2, M.blanc, groupeToit); // dalle haute / chaînage
 
@@ -361,12 +490,26 @@ export function afficher3D(conteneur, plan, options = {}) {
     for (const pts of faces) {
       // Coordonnées de texture : le long de l'égout (u) et suivant la pente (v)
       const [p0, p1] = pts, dir = new THREE.Vector3(p1[0] - p0[0], 0, p1[2] - p0[2]).normalize();
-      for (const t of pts.length === 4 ? [[0, 1, 2], [0, 2, 3]] : [[0, 1, 2]]) for (const i of t) { const p = pts[i]; pos.push(...p); uv.push(new THREE.Vector3(p[0] - p0[0], 0, p[2] - p0[2]).dot(dir), (p[1] - y0) / Math.sin(pente)); }
+      for (const t of pts.length === 4 ? [[0, 2, 1], [0, 3, 2]] : [[0, 2, 1]]) for (const i of t) { const p = pts[i]; pos.push(...p); uv.push(new THREE.Vector3(p[0] - p0[0], 0, p[2] - p0[2]).dot(dir) / 2.4, (p[1] - y0) / Math.sin(pente) / 4.48); }
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); geo.computeVertexNormals();
     const toit = new THREE.Mesh(geo, M.tuiles); toit.castShadow = true; toit.receiveShadow = true; groupeToit.add(toit);
+    // Faîtières et arêtiers en volumes, regroupés en une seule passe GPU.
+    const aretes = [[r1, r2], [a, r1], [b, long ? r2 : r1], [c, r2], [d, long ? r1 : r2]];
+    const capsules = [];
+    for (const [depart, fin] of aretes) {
+      const p = new THREE.Vector3(...depart), q = new THREE.Vector3(...fin), distance = p.distanceTo(q); if (distance < 0.05) continue;
+      const nombre = Math.ceil(distance / 0.29), axe = q.clone().sub(p).normalize();
+      for (let i = 0; i < nombre; i++) capsules.push({ position: p.clone().lerp(q, (i + 0.5) / nombre).add(new THREE.Vector3(0, 0.045, 0)), axe, longueur: distance / nombre + 0.018 });
+    }
+    const faite = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.075, 0.08, 1, 8), mat({ color: 0x975438, roughness: 0.9 }), capsules.length), transform = new THREE.Object3D();
+    capsules.forEach((c, i) => { transform.position.copy(c.position); transform.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.axe); transform.scale.set(1, c.longueur, 1); transform.updateMatrix(); faite.setMatrixAt(i, transform.matrix); });
+    faite.receiveShadow = true; groupeToit.add(faite);
     for (const [sx, sz, x, z] of [[lx, 0.04, W / 2, z0], [lx, 0.04, W / 2, z1], [0.04, lz, x0, D / 2], [0.04, lz, x1, D / 2]]) boite(sx, 0.22, sz, x, y0 - 0.06, z, M.rive, groupeToit);
     boite(lx, 0.03, lz, W / 2, y0 - 0.16, D / 2, M.rive, groupeToit, false);
+    // Gouttières et descentes discrètes, uniquement aux coins de l'enveloppe.
+    for (const z of [z0 - 0.025, z1 + 0.025]) boite(lx + 0.12, 0.12, 0.12, W / 2, y0 - 0.1, z, M.alu, groupeToit, false);
+    for (const x of [0.14, W - 0.14]) { const descente = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, haut - SOL, 8), M.alu); descente.position.set(x, (haut + SOL) / 2, D + 0.14); descente.castShadow = true; scene.add(descente); }
   }
   // Terrasse couverte : dallage, poteaux enduits, auvent (appentis)
   if (T) {
@@ -375,28 +518,38 @@ export function afficher3D(conteneur, plan, options = {}) {
     for (const x of [T.x + 0.2, T.x + T.w - 0.2]) { boite(0.28, hP - SOL, 0.28, x, (SOL + hP) / 2, T.y + 0.2, M.enduit, scene, true, 2); boite(0.36, 0.12, 0.36, x, SOL + 0.06, T.y + 0.2, M.pierre); }
     if (plan.etage) {
       // Balcon de l'étage : dalle au-dessus de la terrasse, garde-corps
-      boite(T.w + 0.3, 0.22, T.h + 0.3, T.x + T.w / 2, hautRDC + 0.11, T.y + T.h / 2 - 0.15, M.blanc);
-      for (const [sx, sz, x, z] of [[T.w + 0.3, 0.08, T.x + T.w / 2, T.y - 0.25], [0.08, T.h + 0.3, T.x - 0.1, T.y + T.h / 2 - 0.15], [0.08, T.h + 0.3, T.x + T.w + 0.1, T.y + T.h / 2 - 0.15]]) boite(sx, 1.0, sz, x, hautRDC + 0.72, z, M.enduit, scene, true, 2);
+      boite(T.w + 0.3, 0.22, T.h + 0.3, T.x + T.w / 2, hautRDC + 0.11, T.y + T.h / 2 - 0.15, M.blanc, groupeEtage);
+      for (const [sx, sz, x, z] of [[T.w + 0.3, 0.08, T.x + T.w / 2, T.y - 0.25], [0.08, T.h + 0.3, T.x - 0.1, T.y + T.h / 2 - 0.15], [0.08, T.h + 0.3, T.x + T.w + 0.1, T.y + T.h / 2 - 0.15]]) boite(sx, 1.0, sz, x, hautRDC + 0.72, z, M.enduit, groupeEtage, true, 2);
     } else {
     const inc = toiture === "terrasse" ? 0 : THREE.MathUtils.degToRad(12), prof = T.h + 0.5, yHaut = haut + (toiture === "terrasse" ? 0 : 0.12), yBas = yHaut - prof * Math.tan(inc);
     const auvent = new THREE.Mesh(new THREE.PlaneGeometry(T.w + 0.6, prof / Math.cos(inc)), toiture === "terrasse" ? M.blanc : M.tuiles);
     const uvA = auvent.geometry.attributes.uv; for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) * (T.w + 0.6), uvA.getY(i) * prof);
-    auvent.position.set(T.x + T.w / 2, (yHaut + yBas) / 2, -prof / 2); auvent.rotation.x = -Math.PI / 2 - inc; auvent.castShadow = true; auvent.receiveShadow = true; groupeToit.add(auvent);
-    boite(T.w + 0.6, 0.2, 0.05, T.x + T.w / 2, yBas - 0.08, -prof, M.rive, groupeToit);
+    for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) / 2.4, uvA.getY(i) / 4.48);
+    auvent.position.set(T.x + T.w / 2, (yHaut + yBas) / 2, T.y + T.h - prof / 2); auvent.rotation.x = -Math.PI / 2 - inc; auvent.castShadow = true; auvent.receiveShadow = true; groupeToit.add(auvent);
+    boite(T.w + 0.6, 0.2, 0.05, T.x + T.w / 2, yBas - 0.08, T.y + T.h - prof, M.rive, groupeToit);
     boite(T.w + 0.4, 0.14, 0.28, T.x + T.w / 2, hP + 0.07, T.y + 0.2, M.blanc, groupeToit);
     }
   }
   scene.add(groupeToit);
 
   // ---------- Végétation ----------
+  const palmes = new THREE.BufferGeometry(), feuilles = [];
+  const pointPalme = (u) => [u * 2.6, Math.sin(u * Math.PI) * 0.35 - u * u * 0.8, 0];
+  const folioles = leger ? 10 : 17;
+  for (let i = 1; i <= folioles; i++) {
+    const u = i / (folioles + 1), p = pointPalme(u), suivant = pointPalme(u + 0.8 / (folioles + 1)), largeur = Math.sin(u * Math.PI) * 0.5;
+    for (const s of [-1, 1]) { feuilles.push(...p, p[0] + 0.25, p[1] - 0.05, s * largeur, ...suivant); feuilles.push(...suivant, p[0] + 0.25, p[1] - 0.05, s * largeur, p[0] + 0.34, p[1] - 0.08, s * largeur * 0.72); }
+  }
+  palmes.setAttribute("position", new THREE.Float32BufferAttribute(feuilles, 3)); palmes.computeVertexNormals();
+  const feuillePalme = M.feuille.clone(), feuillePalme2 = M.feuille2.clone(); feuillePalme.side = feuillePalme2.side = THREE.DoubleSide;
   const palmier = (x, z, t = 1) => {
     const g = new THREE.Group(); let px = 0, py = 0;
     for (let i = 0; i < 7; i++) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * t, 0.17 * t, 0.9 * t, 8), M.tronc); px += 0.06 * t; py += 0.88 * t; s.position.set(px, py - 0.44 * t, 0); s.rotation.z = -0.07; s.castShadow = true; g.add(s); }
-    for (let i = 0; i < 12; i++) {
-      // Palme : ellipsoïde très aplati, pivoté vers l'extérieur et retombant
-      const pivot = new THREE.Group(), ang = (i / 12) * Math.PI * 2 + (i % 2) * 0.15;
-      const f = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 6), i % 2 ? M.feuille : M.feuille2);
-      f.scale.set(1.5 * t, 0.05 * t, 0.32 * t); f.position.x = 1.35 * t; f.rotation.z = -0.35; f.castShadow = true;
+    const nombre = leger ? 8 : 12;
+    for (let i = 0; i < nombre; i++) {
+      const pivot = new THREE.Group(), ang = (i / nombre) * Math.PI * 2 + (i % 2) * 0.15;
+      const f = new THREE.Mesh(palmes, i % 2 ? feuillePalme : feuillePalme2);
+      f.scale.setScalar(t * (0.85 + (i % 3) * 0.09)); f.castShadow = true;
       pivot.add(f); pivot.position.set(px, py, 0); pivot.rotation.set(0, ang, -0.25 - (i % 3) * 0.12); g.add(pivot);
     }
     g.position.set(x, 0, z); scene.add(g);
@@ -421,7 +574,37 @@ export function afficher3D(conteneur, plan, options = {}) {
   }
 
   // ---------- Aménagement intérieur : mobilier détaillé, textiles, luminaires, plantes ----------
-  meubler(scene, M, boite, [[plan, SOL], ...(plan.etage ? [[plan.etage, hautRDC + 0.25]] : [])], H, Boolean(options.film));
+  meubler(scene, M, boite, [[plan, SOL]], H, Boolean(options.film), leger);
+  if (plan.etage) meubler(groupeEtage, M, boite, [[plan.etage, hautRDC + 0.25]], H, Boolean(options.film), leger);
+  // Three r160 ne possède pas scene.environmentIntensity. Réduire la même
+  // énergie ambiante sur chaque matière conserve les ombres sous les auvents.
+  const matieresEclairees = new Set();
+  scene.traverse((o) => { for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) if (m.isMeshStandardMaterial) matieresEclairees.add(m); });
+  for (const m of matieresEclairees) m.envMapIntensity = 0.25;
+  const volumesRegroupes = options.fusion === false ? 0 : [scene, groupeToit, groupeEtage].reduce((s, groupe) => s + fusionnerVolumes(groupe), 0);
+
+  // Les ombres ne changent qu'avec le toit ou le niveau ; la caméra seule ne
+  // déclenche pas un nouveau calcul de toute la carte d'ombre.
+  renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+  let detruit = false;
+  const nettoyer = () => {
+    if (detruit) return; detruit = true;
+    for (const im of chargements) im.onload = im.onerror = null;
+    controles.dispose();
+    const geometries = new Set(), materiaux = new Set(), textures = new Set();
+    scene.traverse((o) => { if (o.geometry) geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) materiaux.add(m); });
+    geometries.add(ciel.geometry); materiaux.add(ciel.material);
+    for (const m of materiaux) { for (const valeur of Object.values(m)) if (valeur?.isTexture) textures.add(valeur); m.dispose(); }
+    for (const g of geometries) g.dispose();
+    for (const t of Object.values(tex)) textures.add(t);
+    for (const m of Object.values(reliefs)) for (const t of Object.values(m)) textures.add(t);
+    for (const t of textures) t.dispose();
+    soleil.shadow.dispose(); environnement.dispose(); fondLeger?.dispose(); pmrem.dispose(); renderer.renderLists.dispose(); renderer.dispose(); renderer.forceContextLoss();
+    renderer.domElement.remove();
+  };
+  const montrerToit = (visible) => { if (groupeToit.visible !== visible || (visible && !groupeEtage.visible)) renderer.shadowMap.needsUpdate = true; groupeToit.visible = visible; if (visible) groupeEtage.visible = true; };
+  const niveau = (n = 0) => { const visible = n > 0 || !plan.etage; if (groupeEtage.visible !== visible) renderer.shadowMap.needsUpdate = true; groupeEtage.visible = visible; };
+  const mesures = () => ({ appels: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, volumesRegroupes, qualite: leger ? "legere" : "detaillee", environnement: leger ? 64 : 256, texture: leger ? 256 : 512, ombres: tailleOmbre, antialias: !leger && Boolean(!options.film || options.photo) });
 
   // ---------- Mode tournage (atelier vidéo) : caméra pilotée image par image ----------
   if (options.film) {
@@ -430,8 +613,8 @@ export function afficher3D(conteneur, plan, options = {}) {
     controles.dispose();
     return {
       canvas: renderer.domElement, SOL, haut, limites: { avant, arriere, gauche, droite }, camera,
-      toit(visible) { groupeToit.visible = visible; },
-      image(position, cible, fov = 38) { camera.fov = fov; camera.updateProjectionMatrix(); camera.position.copy(position); camera.lookAt(cible); renderer.render(scene, camera); },
+      toit: montrerToit, niveau, mesures, detruire: nettoyer,
+      image(position, cible, fov = 38) { if (detruit) return; camera.fov = fov; camera.updateProjectionMatrix(); camera.position.copy(position); camera.lookAt(cible); renderer.render(scene, camera); },
     };
   }
 
@@ -441,25 +624,43 @@ export function afficher3D(conteneur, plan, options = {}) {
   const vueEnsemble = () => { camera.position.set(W / 2 - recul * 0.95, recul * 0.55 + 2, -recul * 1.15); controles.target.copy(centre); controles.minDistance = 4; controles.maxDistance = quartier ? 220 : 120; controles.update(); };
   vueEnsemble();
   const taille = () => { const w = conteneur.clientWidth || 600, h = conteneur.clientHeight || 400; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
-  const obs = new ResizeObserver(taille); obs.observe(conteneur); taille();
-  let actif = true, iPiece = -1;
-  renderer.setAnimationLoop(() => { if (!actif) return; controles.update(); renderer.render(scene, camera); });
+  taille();
+  let actif = true, visible = true, iPiece = -1, frame = 0, sale = true, enRendu = false, rotationPermise = Boolean(options.auto);
+  const dessiner = () => {
+    frame = 0; if (!actif || !visible || document.hidden) return;
+    enRendu = true; const change = controles.update(); enRendu = false;
+    if (sale || change || controles.autoRotate) { renderer.render(scene, camera); sale = false; }
+    if (change || controles.autoRotate) frame = requestAnimationFrame(dessiner);
+  };
+  const invalider = () => { sale = true; if (!enRendu && !frame && actif && visible && !document.hidden) frame = requestAnimationFrame(dessiner); };
+  rafRendering = invalider;
+  const visibilite = () => { if (frame) cancelAnimationFrame(frame); frame = 0; invalider(); };
+  const mouvement = () => { controles.autoRotate = rotationPermise && !mouvementReduit?.matches; invalider(); };
+  const intersection = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([entree]) => { visible = entree.isIntersecting; visibilite(); }, { rootMargin: "100px" });
+  intersection?.observe(conteneur);
+  document.addEventListener("visibilitychange", visibilite); mouvementReduit?.addEventListener("change", mouvement);
+  controles.addEventListener("change", invalider); controles.addEventListener("start", invalider);
+  // Le redimensionnement suit aussi les panneaux masqués puis réouverts.
+  const dimensions = new ResizeObserver(() => { taille(); invalider(); }); dimensions.observe(conteneur);
+  invalider();
 
   return {
-    toit(visible) { groupeToit.visible = visible; },
-    vueEnsemble() { groupeToit.visible = true; camera.fov = 38; camera.updateProjectionMatrix(); if (options.auto) { controles.autoRotate = true; controles.enableZoom = false; } vueEnsemble(); },
+    toit(visible) { montrerToit(visible); invalider(); },
+    mesures,
+    vueEnsemble() { montrerToit(true); camera.fov = 38; camera.updateProjectionMatrix(); rotationPermise = Boolean(options.auto); mouvement(); if (options.auto) controles.enableZoom = false; vueEnsemble(); invalider(); },
     // Visite : chaque appel passe à la pièce suivante (séjour, cuisine, chambres…) et renvoie son nom
     visite() {
-      const ordre = ["salon", "cuisine", "chambre", "detente", "bureau", "sdb"], liste = plan.pieces.filter((q) => ordre.includes(q.type)).sort((a, c) => ordre.indexOf(a.type) - ordre.indexOf(c.type));
+      const ordre = ["salon", "cuisine", "chambre", "detente", "bureau", "sdb"], liste = [[plan, SOL, 0], ...(plan.etage ? [[plan.etage, hautRDC + 0.25, 1]] : [])].flatMap(([pl, base, etage]) => pl.pieces.filter((q) => ordre.includes(q.type)).sort((a, c) => ordre.indexOf(a.type) - ordre.indexOf(c.type)).map((q) => ({ ...q, base, etage })));
+      if (!liste.length) return "Vue d'ensemble";
       iPiece = (iPiece + 1) % liste.length; const s = liste[iPiece];
       // Vue « maison de poupée » : toit retiré, caméra plongeante au-dessus de la pièce (on voit tout le mobilier)
-      groupeToit.visible = false; controles.autoRotate = false; controles.enableZoom = true;
+      groupeToit.visible = false; niveau(s.etage); rotationPermise = false; controles.autoRotate = false; controles.enableZoom = true;
       camera.fov = 50; camera.updateProjectionMatrix();
       const cxp = s.x + s.w / 2, czp = s.y + s.h / 2, t = Math.max(s.w, s.h);
-      camera.position.set(cxp - t * 0.18, SOL + H + 1.2 + t * 0.95, czp + t * 0.42); controles.target.set(cxp, SOL + 0.3, czp - t * 0.05);
+      camera.position.set(cxp - t * 0.18, s.base + H + 1.2 + t * 0.95, czp + t * 0.42); controles.target.set(cxp, s.base + 0.3, czp - t * 0.05);
       controles.minDistance = 0.1; controles.maxDistance = 30; controles.update();
-      return s.nom;
+      invalider(); return `${s.nom}${s.etage ? " · étage" : ""}`;
     },
-    detruire() { actif = false; obs.disconnect(); renderer.setAnimationLoop(null); pmrem.dispose(); renderer.dispose(); Object.values(tex).forEach((t) => t.dispose()); conteneur.innerHTML = ""; },
+    detruire() { actif = false; if (frame) cancelAnimationFrame(frame); dimensions.disconnect(); intersection?.disconnect(); document.removeEventListener("visibilitychange", visibilite); mouvementReduit?.removeEventListener("change", mouvement); nettoyer(); },
   };
 }

@@ -2,6 +2,7 @@
 # Déclenché par l'API GitHub (workflow_dispatch) après paiement. Les fichiers sont déposés directement dans le stockage privé
 # de Nina Architecture (jamais publiés ici), puis le site prévient le client.
 name: Dossier client Nina Architecture
+run-name: Nina dossier ${{ inputs.id }}
 
 on:
   workflow_dispatch:

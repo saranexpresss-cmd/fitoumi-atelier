@@ -1,6 +1,6 @@
 // Réalisateur automatique : film de visite d'une maison Nina Architecture (1920×1080, 25 images/s, musique originale).
 // Exécuté dans un navigateur invisible par l'atelier (GitHub Actions) : chaque image est calculée puis envoyée au serveur local (ffmpeg).
-import { afficher3D, THREE } from "./archi/vue3d.js";
+import { afficher3D, cadragesMaison, THREE } from "./archi/vue3d.js";
 import { composer, versWav } from "./studio-musique.js";
 
 // Rendu en 1280 × 720 (le navigateur de l'atelier calcule la 3D sur processeur) ; l'habillage est dessiné dans un repère 1920 × 1080 mis à l'échelle
@@ -13,19 +13,21 @@ await Promise.all(["800 60px Jakarta", "600 30px Jakarta", "400 26px Jakarta"].m
 const plan = S.plan, W = plan.largeur, D = plan.profondeur, T = plan.terrasse, R = Math.max(W, D);
 const vue = afficher3D(document.getElementById("scene"), plan, { film: true, largeur: L, hauteur: H });
 const LIMITE = Number(params.get("limite")) || Infinity; // essais : nombre d'images maximal
-const V = (x, y, z) => new THREE.Vector3(x, y, z), C = V(W / 2, 1.4, D / 2), lim = vue.limites, SOL = vue.SOL;
+const V = (x, y, z) => new THREE.Vector3(x, y, z), C = V(W / 2, vue.SOL + (plan.etage ? 3 : 1.6), D / 2), SOL = vue.SOL;
+const cadrages = cadragesMaison(plan, vue.limites), facade = cadrages.find((p) => p.nom === "facade"), terrasse = cadrages.find((p) => p.nom === "terrasse");
 const salon = plan.pieces.find((q) => q.type === "salon") || plan.pieces[0];
 const chambres = plan.pieces.filter((q) => q.type === "chambre").length;
 const doux = (t) => t * t * (3 - 2 * t), lerp = (a, b, t) => a.clone().lerp(b, t);
 const orbite = (angle, rayon, h, centre = C) => V(centre.x + Math.sin(angle) * rayon, h, centre.z - Math.cos(angle) * rayon);
 const deg = THREE.MathUtils.degToRad;
+const baseEtage = SOL + (plan.hauteur || 3) + 0.25, pieceR = Math.max(salon.w, salon.h);
 
 // Plans du film : durée, caméra, cible, toit visible, légende
 const PLANS = [
   { d: 7, cam: (t) => orbite(deg(-60 + 70 * t), R * 1.75, R * 0.8 + 4), cible: () => C, legende: null },
-  { d: 6, cam: (t) => lerp(V(W / 2 - 4, 6.5, lim.avant - 9), V(salon.x + salon.w / 2 - 1.5, SOL + 1.7, (T ? T.y : 0) - 3.2), t), cible: (t) => lerp(V(W / 2, 1.8, D / 3), V(salon.x + salon.w / 2, SOL + 1.6, 1.2), t), legende: T ? `Terrasse couverte · ${fr(T.surface)} m²` : "L'entrée" },
-  { d: 6, cam: (t) => lerp(V(salon.x + salon.w / 2 - 0.8, SOL + 1.65, -0.6), V(salon.x + salon.w * 0.45, SOL + 1.6, salon.h * 0.55), t), cible: (t) => lerp(V(salon.x + salon.w * 0.6, SOL + 1.4, salon.h), V(salon.x + salon.w, SOL + 1.3, salon.h * 0.4), t), legende: `${salon.nom} · ${fr(salon.surface)} m²` },
-  { d: 6, toit: false, cam: (t) => orbite(deg(-40 + 70 * t), R * 0.55, R * 1.35 + 3), cible: () => V(W / 2, 0, D / 2), legende: `${chambres} chambre${chambres > 1 ? "s" : ""} · ${fr(plan.habitable)} m² de pièces` },
+  { d: 6, cam: (t) => lerp(facade.cam, terrasse.cam, t), cible: (t) => lerp(facade.cible, terrasse.cible, t), fov: 60, legende: T ? `Terrasse couverte · ${fr(T.surface)} m²` : "L'entrée" },
+  { d: 6, toit: false, niveau: 0, cam: (t) => V(salon.x + salon.w * (0.25 + 0.3 * t), SOL + (plan.hauteur || 3) + pieceR * 0.7, salon.y + salon.h * (1.1 - 0.25 * t)), cible: () => V(salon.x + salon.w / 2, SOL + 0.3, salon.y + salon.h / 2), fov: 50, legende: `${salon.nom} · ${fr(salon.surface)} m²` },
+  { d: 6, toit: false, niveau: plan.etage ? 1 : 0, cam: (t) => orbite(deg(-40 + 70 * t), R * 0.55, (plan.etage ? baseEtage : SOL) + R * 1.35 + 3), cible: () => V(W / 2, plan.etage ? baseEtage : SOL, D / 2), legende: `${plan.etage ? "L'étage · " : ""}${chambres} chambre${chambres > 1 ? "s" : ""} · ${fr(plan.habitable)} m² de pièces` },
   { d: 6, cam: (t) => orbite(deg(30 + 40 * t), R * (1.6 + 0.5 * t), R * (0.7 + 0.35 * t) + 3), cible: () => C, legende: S.budget ? `Budget estimatif : ${S.budget}` : null, fin: true },
 ];
 const DUREE = PLANS.reduce((s, p) => s + p.d, 0), TOTAL = Math.min(LIMITE, Math.round(DUREE * FPS));
@@ -57,6 +59,7 @@ function composerImage(n) {
   while (i < PLANS.length - 1 && temps >= debut + PLANS[i].d) { debut += PLANS[i].d; i++; }
   const p = PLANS[i], loc = Math.min(1, (temps - debut) / p.d), e = doux(loc);
   vue.toit(p.toit !== false);
+  if (p.niveau !== undefined) vue.niveau(p.niveau);
   vue.image(p.cam(e), p.cible(e), p.fov || 40);
   g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(vue.canvas, 0, 0, L, H); g.setTransform(K, 0, 0, K, 0, 0);
   // Fondu au noir entre les plans
@@ -86,6 +89,7 @@ function composerImage(n) {
 }
 
 window.composerImage = composerImage; // aperçu manuel dans un navigateur
+window.addEventListener("pagehide", () => vue.detruire(), { once: true });
 if (rendu) {
   etat(`Musique (${DUREE} s)…`);
   await fetch(`/audio?video=${S.id}`, { method: "POST", body: versWav(await composer(DUREE, { graine: S.graine || 1 })) });
@@ -97,6 +101,7 @@ if (rendu) {
   }
   etat("Assemblage du MP4…");
   window.resultat = await (await fetch(`/fin?video=${S.id}`, { method: "POST" })).json();
+  vue.detruire();
   window.fini = true;
   etat(window.resultat.ok ? `Terminé : ${(window.resultat.taille / 1e6).toFixed(1)} Mo` : `Échec : ${window.resultat.journal}`);
 } else { composerImage(Math.round(FPS * 3)); document.body.appendChild(toile); toile.style.width = "100%"; etat("Aperçu (image à 3 s)"); window.fini = true; }
