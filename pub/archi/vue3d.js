@@ -5,6 +5,7 @@
 import * as THREE from "./vendor/three/three.module.min.js";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { Sky } from "./vendor/three/Sky.js";
+import { RGBELoader } from "./assets3d/RGBELoader.js";
 
 const SOL = 0.45; // plancher surélevé (soubassement)
 // Même palette que la collection et ses façades techniques.
@@ -309,7 +310,9 @@ export function cadragesMaison(plan, limites) {
   const courZ = limites?.avant !== undefined ? limites.avant + 1.2 : (T?.y || 0) - 5;
   return [
     { nom: "vue-ensemble", toit: true, cam: V(W / 2 - R * 1.3, R * 0.7 + (plan.etage ? 5 : 3), D / 2 - R * 1.65), cible: C, fov: 38 },
-    { nom: "facade", toit: true, cam: V(W / 2 - W * 0.36, SOL + 1.75 + (plan.etage ? 0.9 : 0), courZ), cible: V(W / 2, SOL + H * (plan.etage ? 1 : 0.6), D * 0.12), fov: 62 },
+    { nom: "facade", toit: true, cam: V(W * 0.28, SOL + 2.15 + (plan.etage ? 1.4 : 0), courZ - 0.45), cible: V(W / 2, SOL + H * (plan.etage ? 1.04 : 0.72), D * 0.1), fov: 66 },
+    { nom: "perspective", toit: true, cam: V(Math.max((limites?.gauche ?? -4) + 1.1, -W * 0.24), SOL + 2.5 + (plan.etage ? 1.6 : 0), courZ - 0.15), cible: V(W * 0.5, SOL + H * (plan.etage ? 1 : 0.7), D * 0.2), fov: 64 },
+    { nom: "dessus", toit: false, niveau: 0, cam: V(W / 2, SOL + H + R * 1.7, D / 2 + 0.01), cible: V(W / 2, SOL, D / 2), fov: 42 },
     { nom: "terrasse", toit: true, cam: V(T ? T.x + T.w * 0.1 : W * 0.12, SOL + 1.65, T ? T.y - 2.2 : -3.6), cible: V(salon.x + salon.w / 2, SOL + 1.4, 0.35), fov: 58 },
     { nom: "interieur", toit: false, niveau: 0, cam: V(W / 2 - R * 0.18, SOL + H + R * 1.15, D / 2 + R * 0.5), cible: V(W / 2, SOL, D / 2), fov: 46 },
     ...(plan.etage ? [{ nom: "interieur-etage", toit: false, niveau: 1, cam: V(W / 2 - R * 0.18, SOL + H * 2 + 0.25 + R * 1.15, D / 2 + R * 0.5), cible: V(W / 2, SOL + H + 0.25, D / 2), fov: 46 }] : []),
@@ -321,36 +324,48 @@ export function afficher3D(conteneur, plan, options = {}) {
   const leger = options.qualite === "legere" || (!options.film && (navigator.deviceMemory <= 4 || window.matchMedia?.("(max-width: 700px)").matches));
   const toiture = options.toiture || plan.toiture || "4pans";
   const style = STYLES[plan.style] || { enduit: 0xF5EFE3, accent: 0x343B3C };
+  const exterieurSeul = Boolean(options.exterieurSeul);
   const scene = new THREE.Scene();
   const chargements = []; let rafRendering = () => {};
   const renderer = new THREE.WebGLRenderer({ antialias: !leger && Boolean(!options.film || options.photo), alpha: compact, powerPreference: "low-power", preserveDrawingBuffer: Boolean(options.film) });
   renderer.setPixelRatio(options.film ? 1 : Math.min(leger ? 1.25 : 1.75, window.devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.72;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   conteneur.innerHTML = ""; conteneur.appendChild(renderer.domElement);
   renderer.domElement.setAttribute("aria-label", "Maquette 3D de votre maison. Glissez pour tourner et pincez pour zoomer.");
   const camera = new THREE.PerspectiveCamera(38, 1, 0.12, 1000);
+  // Les cadrages sont composés en 16:9. Une scène carrée ou verticale garde
+  // leur largeur visible ; photos et films conservent exactement leur focale.
+  let fovCadre = null;
+  const reglerFov = (fov) => {
+    fovCadre = fov;
+    camera.fov = options.film ? fov : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov) / 2) * Math.max(1, (16 / 9) / camera.aspect)));
+    camera.updateProjectionMatrix();
+  };
   const quartier = !options.transparent && options.quartier;
   if (quartier) renderer.domElement.setAttribute("aria-description", "Le sol utilise une imagerie satellite. Les bâtiments voisins et la parcelle sont une mise en situation indicative.");
   const controles = new OrbitControls(camera, renderer.domElement);
   controles.enableDamping = true; controles.dampingFactor = 0.085; controles.maxPolarAngle = Math.PI * 0.485;
   controles.zoomSpeed = 0.8; controles.panSpeed = 0.6;
+  if (exterieurSeul) controles.enablePan = false;
   if (options.auto) { controles.autoRotate = !mouvementReduit?.matches; controles.autoRotateSpeed = 0.45; controles.enableZoom = false; controles.enablePan = false; }
 
   // Environnement (reflets doux) + ciel physique + soleil de fin d'après-midi
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const soleilDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(52), THREE.MathUtils.degToRad(225));
+  const soleilDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(54), THREE.MathUtils.degToRad(225));
   const ciel = new Sky(); ciel.scale.setScalar(450);
   const u = ciel.material.uniforms; u.turbidity.value = 2.6; u.rayleigh.value = 1.25; u.mieCoefficient.value = 0.003; u.mieDirectionalG.value = 0.78; u.sunPosition.value.copy(soleilDir);
   const atmosphere = new THREE.Scene(); atmosphere.add(ciel);
   const fondLeger = leger ? environnementLeger(soleilDir) : null;
-  const environnement = leger ? pmrem.fromEquirectangular(fondLeger) : pmrem.fromScene(atmosphere, 0.08, 0.1, 1000);
+  let environnement = leger ? pmrem.fromEquirectangular(fondLeger) : pmrem.fromScene(atmosphere, 0.08, 0.1, 1000);
   scene.environment = environnement.texture;
   if (!compact) { if (leger) scene.background = new THREE.Color(0xD3E0E6); else scene.add(ciel); }
   if (!quartier && !compact) scene.fog = new THREE.FogExp2(0xdde3e4, 0.003);
-  scene.add(new THREE.HemisphereLight(0xDCE8F3, 0x8B785D, 0.35));
-  const soleil = new THREE.DirectionalLight(0xFFF0DA, 3.1);
+  // Le ciel et le sol apportent un remplissage neutre et une légère réflexion
+  // chaude. Un ciel bleu pur teintait tout l'enduit à l'ombre en gris bleuté.
+  const ambiance = new THREE.HemisphereLight(0xF0EEE5, 0xB5A38A, 0.72); scene.add(ambiance);
+  const soleil = new THREE.DirectionalLight(0xFFF1DB, 3.0);
   soleil.position.copy(soleilDir).multiplyScalar(60).add(new THREE.Vector3(W / 2, 0, D / 2)); soleil.target.position.set(W / 2, 0, D / 2);
   soleil.castShadow = true; const tailleOmbre = leger || (options.film && !options.photo) ? 1024 : 2048;
   soleil.shadow.mapSize.set(tailleOmbre, tailleOmbre); soleil.shadow.bias = -0.00008; soleil.shadow.normalBias = 0.025; soleil.shadow.radius = 3;
@@ -364,15 +379,51 @@ export function afficher3D(conteneur, plan, options = {}) {
   for (const t of Object.values(tex)) t.anisotropy = Math.min(leger ? 2 : 8, renderer.capabilities.getMaxAnisotropy());
   const mat = (o) => new THREE.MeshStandardMaterial({ roughness: 0.9, ...o });
   const M = {
-    enduit: mat({ color: style.enduit, map: tex.enduit, ...reliefs.enduit, bumpScale: 0.012 }), interieur: mat({ color: 0xF0EEE7 }), pierre: mat({ map: tex.pierre, ...reliefs.pierre, bumpScale: 0.06 }),
+    enduit: mat({ color: style.enduit, map: tex.enduit, ...reliefs.enduit, bumpScale: 0.003 }), interieur: mat({ color: 0xEEEAE1 }), pierre: mat({ map: tex.pierre, ...reliefs.pierre, bumpScale: 0.03 }),
     carrelage: mat({ map: tex.carrelage, ...reliefs.carrelage, bumpScale: 0.008 }), parquet: mat({ map: tex.parquet, ...reliefs.parquet, bumpScale: 0.009 }), dallage: mat({ map: tex.paves, ...reliefs.paves, bumpScale: 0.025 }),
     herbe: mat({ map: tex.herbe, ...reliefs.herbe, bumpScale: 0.035 }), paves: mat({ map: tex.paves, ...reliefs.paves, bumpScale: 0.025 }), tuiles: mat({ map: tex.tuiles, ...reliefs.tuiles, bumpScale: 0.045, side: THREE.DoubleSide }),
-    bois: mat({ map: tex.bois, ...reliefs.bois, bumpScale: 0.012 }), alu: mat({ color: style.accent, roughness: 0.3, metalness: 0.75 }), blanc: mat({ color: 0xEFEFEA }),
-    verre: new (leger ? THREE.MeshStandardMaterial : THREE.MeshPhysicalMaterial)({ color: 0xD8E4E2, roughness: 0.07, metalness: 0, transparent: true, opacity: 0.25, depthWrite: false, ...(leger ? {} : { ior: 1.5, clearcoat: 1, clearcoatRoughness: 0.06 }), envMapIntensity: 0.8, side: THREE.DoubleSide }),
+    bois: mat({ map: tex.bois, ...reliefs.bois, bumpScale: 0.008 }), alu: mat({ color: new THREE.Color(style.accent).multiplyScalar(0.48), roughness: 0.33, metalness: 0.65 }), blanc: mat({ color: 0xE7E6DE }),
+    // Le vitrage reste lisible à l'extérieur : reflet de Fresnel, teinte absorbante
+    // et transparence partielle. Les intérieurs ne sont plus des aplats blancs.
+    verre: new (leger ? THREE.MeshStandardMaterial : THREE.MeshPhysicalMaterial)({ color: 0x607E82, roughness: 0.065, metalness: 0.28, transparent: true, opacity: 0.57, depthWrite: false, ...(leger ? {} : { ior: 1.52, clearcoat: 1, clearcoatRoughness: 0.04, specularIntensity: 1 }), envMapIntensity: 1.2, side: THREE.DoubleSide }),
+    joint: mat({ color: 0x26302D, roughness: 0.83 }), terre: mat({ color: 0x443A2B, roughness: 1 }),
     rive: mat({ color: 0xF4F1EA }), beton: mat({ color: 0xC9C3B8 }), sombre: mat({ color: 0x2B2B2B, roughness: 0.5, metalness: 0.6 }),
     feuille: mat({ color: 0x465D35, roughness: 0.95 }), feuille2: mat({ color: 0x617447, roughness: 0.95 }), tronc: mat({ color: 0x6E5034 }), fleur: mat({ color: 0xA7616D, roughness: 0.95 }), fleur2: mat({ color: 0xBF9B50, roughness: 0.95 }),
     tissu: mat({ color: 0x55606E }), drap: mat({ color: 0xF1F1EE }),
   };
+  // Photographies de matières CC0 auto-hébergées. Une panne laisse les matières
+  // procédurales disponibles ; l'atelier attend pret avant toute photographie.
+  const texturesExternes = new Set(), assetsCharges = [], assetsAbsents = [];
+  const chargeur = new THREE.TextureLoader();
+  const chargerMatiere = async (fichier, matieres, canal, force = 1) => {
+    try {
+      let t = await chargeur.loadAsync(new URL(`./assets3d/${fichier}`, import.meta.url).href);
+      if (detruit) { t.dispose(); return; }
+      if (leger) { const c = document.createElement("canvas"); c.width = c.height = 256; c.getContext("2d").drawImage(t.image, 0, 0, 256, 256); t.dispose(); t = new THREE.CanvasTexture(c); }
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = Math.min(leger ? 2 : 8, renderer.capabilities.getMaxAnisotropy()); t.colorSpace = canal === "map" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      texturesExternes.add(t);
+      for (const m of matieres) { m[canal] = t; if (canal === "normalMap") { m.normalScale.set(force, force); m.bumpMap = null; } m.needsUpdate = true; }
+      assetsCharges.push(fichier); rafRendering();
+    } catch { assetsAbsents.push(fichier); }
+  };
+  const chargementsMatieres = [
+    chargerMatiere("grass_ground_diff_1k.jpg", [M.herbe], "map"),
+    chargerMatiere("patio_tiles_diff_1k.jpg", [M.dallage], "map"),
+    chargerMatiere("clay_roof_tiles_02_diff_1k.jpg", [M.tuiles], "map"),
+    ...(!leger ? [
+      chargerMatiere("plastered_wall_04_nor_gl_1k.jpg", [M.enduit], "normalMap", 0.23),
+      chargerMatiere("plastered_wall_04_rough_1k.jpg", [M.enduit], "roughnessMap"),
+      chargerMatiere("patio_tiles_nor_gl_1k.jpg", [M.dallage], "normalMap", 0.55),
+      chargerMatiere("patio_tiles_rough_1k.jpg", [M.dallage], "roughnessMap"),
+      chargerMatiere("clay_roof_tiles_02_nor_gl_1k.jpg", [M.tuiles], "normalMap", 0.65),
+      new RGBELoader().loadAsync(new URL("./assets3d/kloppenheim_06_puresky_1k.hdr", import.meta.url).href).then((hdr) => {
+        if (detruit) { hdr.dispose(); return; }
+        hdr.mapping = THREE.EquirectangularReflectionMapping; const suivant = pmrem.fromEquirectangular(hdr); hdr.dispose(); environnement.dispose(); environnement = suivant; scene.environment = environnement.texture; assetsCharges.push("kloppenheim_06_puresky_1k.hdr"); rafRendering();
+      }).catch(() => { assetsAbsents.push("kloppenheim_06_puresky_1k.hdr"); }),
+    ] : []),
+  ];
+  let matieresPretes = false;
+  const pret = Promise.allSettled(chargementsMatieres).then(() => { matieresPretes = true; rafRendering(); return { charges: [...assetsCharges], absents: [...assetsAbsents] }; });
   const groupeToit = new THREE.Group(), groupeEtage = new THREE.Group(); scene.add(groupeEtage);
   const boite = (sx, sy, sz, x, y, z, m, parent = scene, ombre = true, echelle = 1) => {
     const [a, b, c] = [Math.max(sx, 0.01), Math.max(sy, 0.01), Math.max(sz, 0.01)];
@@ -386,6 +437,15 @@ export function afficher3D(conteneur, plan, options = {}) {
   const sol = new THREE.Mesh(new THREE.PlaneGeometry(lS, pS), M.herbe);
   const uvS = sol.geometry.attributes.uv; for (let i = 0; i < uvS.count; i++) uvS.setXY(i, (uvS.getX(i) * lS) / 3, (uvS.getY(i) * pS) / 3);
   sol.rotation.x = -Math.PI / 2; sol.position.set(quartier ? (gauche + droite) / 2 : W / 2, quartier ? 0.02 : 0, (avant + arriere) / 2); sol.receiveShadow = true; scene.add(sol);
+  // Contact diffus sous les volumes. Canvas utilise un flou natif, sans lire
+  // les pixels. Cette faible occlusion complète les ombres directes du soleil.
+  const contact = (w, d, x, z) => {
+    const c = document.createElement("canvas"); c.width = c.height = leger ? 64 : 128;
+    const g = c.getContext("2d"), n = c.width; g.filter = `blur(${n / 16}px)`; g.fillStyle = "rgba(24,28,20,.5)"; g.fillRect(n * 0.11, n * 0.11, n * 0.78, n * 0.78);
+    const t = new THREE.CanvasTexture(c); texturesExternes.add(t);
+    const ombre = new THREE.Mesh(new THREE.PlaneGeometry(w + 1.15, d + 1.15), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0.62, depthWrite: false })); ombre.rotation.x = -Math.PI / 2; ombre.position.set(x, quartier ? 0.026 : 0.008, z); scene.add(ombre);
+  };
+  contact(W, D, W / 2, D / 2); if (T) contact(T.w, T.h, T.x + T.w / 2, T.y + T.h / 2);
   const xm = (gauche + droite) / 2;
   if (quartier) construireQuartier(scene, M, boite, { gauche, droite, avant, arriere, lat: Number(quartier.lat), lon: Number(quartier.lon), leger, notifier: () => rafRendering(), chargements });
   if (!compact) {
@@ -427,7 +487,12 @@ export function afficher3D(conteneur, plan, options = {}) {
       const bas = o.type === "fenetre" ? base + (o.allege ?? 1) : base, hautO = Math.min(haut, o.type === "fenetre" ? bas + (o.hauteur ?? 1.2) : base + (o.type === "baie" ? 2.3 : o.type === "passage" ? 2.2 : 2.15));
       morceau(h, fixe, a, b, base, bas, ep, m); morceau(h, fixe, a, b, hautO, haut, ep, m);
       if (o.type === "fenetre" || o.type === "baie") {
-        const cadre = 0.055, prof = 0.085;
+        const cadre = 0.05, prof = 0.09;
+        // Joint noir en retrait et tableaux réels : le cadre ne flotte plus
+        // sur l'enduit. L'ouverture conserve exactement les cotes du plan.
+        morceau(h, fixe, a, a + 0.018, bas, hautO, ep + 0.002, M.joint);
+        morceau(h, fixe, b - 0.018, b, bas, hautO, ep + 0.002, M.joint);
+        morceau(h, fixe, a, b, hautO - 0.018, hautO, ep + 0.002, M.joint);
         morceau(h, fixe, a, b, bas, bas + cadre, prof, M.alu); morceau(h, fixe, a, b, hautO - cadre, hautO, prof, M.alu);
         morceau(h, fixe, a, a + cadre, bas, hautO, prof, M.alu); morceau(h, fixe, b - cadre, b, bas, hautO, prof, M.alu);
         const nb = o.largeur > 1.5 ? 3 : o.largeur > 0.8 ? 2 : 1;
@@ -442,7 +507,7 @@ export function afficher3D(conteneur, plan, options = {}) {
           morceau(h, fixe, a - 0.025, a + 0.025, bas, hautO, ep + 0.015, M.rive);
           morceau(h, fixe, b - 0.025, b + 0.025, bas, hautO, ep + 0.015, M.rive);
         }
-        if (ext && o.type === "fenetre") { morceau(h, fixe, a - 0.05, b + 0.05, bas - 0.06, bas, ep + 0.08, M.beton, ext * 0.04); morceau(h, fixe, a - 0.08, b + 0.08, hautO, hautO + 0.12, ep + 0.04, M.rive, ext * 0.02); }
+        if (ext && o.type === "fenetre") { const appui = morceau(h, fixe, a - 0.04, b + 0.04, bas - 0.055, bas, ep + 0.1, M.beton, ext * 0.04); if (appui) { if (h) appui.rotation.x = ext * 0.035; else appui.rotation.z = -ext * 0.035; } morceau(h, fixe, a - 0.03, b + 0.03, hautO, hautO + 0.05, ep + 0.025, M.rive, ext * 0.01); }
       } else if (o.type === "entree" || (ext && o.type === "porte")) {
         morceau(h, fixe, a + 0.03, b - 0.03, base, hautO, 0.06, M.bois);
         morceau(h, fixe, b - 0.14, b - 0.08, base + 1.0, base + 1.05, 0.12, M.sombre);
@@ -505,28 +570,42 @@ export function afficher3D(conteneur, plan, options = {}) {
     const faite = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.075, 0.08, 1, 8), mat({ color: 0x975438, roughness: 0.9 }), capsules.length), transform = new THREE.Object3D();
     capsules.forEach((c, i) => { transform.position.copy(c.position); transform.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.axe); transform.scale.set(1, c.longueur, 1); transform.updateMatrix(); faite.setMatrixAt(i, transform.matrix); });
     faite.receiveShadow = true; groupeToit.add(faite);
-    for (const [sx, sz, x, z] of [[lx, 0.04, W / 2, z0], [lx, 0.04, W / 2, z1], [0.04, lz, x0, D / 2], [0.04, lz, x1, D / 2]]) boite(sx, 0.22, sz, x, y0 - 0.06, z, M.rive, groupeToit);
-    boite(lx, 0.03, lz, W / 2, y0 - 0.16, D / 2, M.rive, groupeToit, false);
+    // À la jonction avec l'appentis, la rive n'est plus un égout extérieur :
+    // ni bande blanche ni gouttière ne doivent traverser le milieu des tuiles.
+    const bandesAvant = T && !plan.etage ? [[x0, Math.max(x0, T.x - 0.3)], [Math.min(x1, T.x + T.w + 0.3), x1]] : [[x0, x1]];
+    for (const [a, b] of bandesAvant) if (b - a > 0.01) boite(b - a, 0.16, 0.04, (a + b) / 2, y0 - 0.06, z0, M.rive, groupeToit);
+    for (const [sx, sz, x, z] of [[lx, 0.04, W / 2, z1], [0.04, lz, x0, D / 2], [0.04, lz, x1, D / 2]]) boite(sx, 0.16, sz, x, y0 - 0.06, z, M.rive, groupeToit);
+    if (T && !plan.etage) {
+      boite(lx, 0.03, z1, W / 2, y0 - 0.16, z1 / 2, M.rive, groupeToit, false);
+      for (const [a, b] of bandesAvant) if (b - a > 0.01) boite(b - a, 0.03, debord, (a + b) / 2, y0 - 0.16, -debord / 2, M.rive, groupeToit, false);
+    } else boite(lx, 0.03, lz, W / 2, y0 - 0.16, D / 2, M.rive, groupeToit, false);
     // Gouttières et descentes discrètes, uniquement aux coins de l'enveloppe.
-    for (const z of [z0 - 0.025, z1 + 0.025]) boite(lx + 0.12, 0.12, 0.12, W / 2, y0 - 0.1, z, M.alu, groupeToit, false);
+    boite(lx + 0.12, 0.1, 0.1, W / 2, y0 - 0.1, z1 + 0.025, M.alu, groupeToit, false);
+    for (const [a, b] of bandesAvant) if (b - a > 0.01) boite(b - a, 0.1, 0.1, (a + b) / 2, y0 - 0.1, z0 - 0.025, M.alu, groupeToit, false);
     for (const x of [0.14, W - 0.14]) { const descente = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, haut - SOL, 8), M.alu); descente.position.set(x, (haut + SOL) / 2, D + 0.14); descente.castShadow = true; scene.add(descente); }
   }
   // Terrasse couverte : dallage, poteaux enduits, auvent (appentis)
   if (T) {
-    boite(T.w, SOL - 0.02, T.h, T.x + T.w / 2, (SOL - 0.02) / 2, T.y + T.h / 2, M.dallage, scene, true, 1);
-    const hP = hautRDC - 0.15;
+    // Chant minéral distinct du revêtement horizontal, dalles de 60 cm.
+    boite(T.w, SOL - 0.045, T.h, T.x + T.w / 2, (SOL - 0.045) / 2, T.y + T.h / 2, M.beton, scene, true, 2);
+    boite(T.w + 0.03, 0.035, T.h + 0.03, T.x + T.w / 2, SOL - 0.027, T.y + T.h / 2, M.dallage, scene, true, 2.4);
+    const inc = toiture === "terrasse" ? 0 : THREE.MathUtils.degToRad(12), prof = T.h + 0.5;
+    // Le plan de l'appentis passe exactement par l'égout principal z=-débord,
+    // y=y0. Sa rive arrière remonte sous les tuiles, sans vide entre les toits.
+    const yHaut = toiture === "terrasse" ? haut : y0 + (T.y + T.h + debord) * Math.tan(inc), yBas = yHaut - prof * Math.tan(inc);
+    const hP = plan.etage ? hautRDC - 0.15 : yBas + 0.7 * Math.tan(inc) - 0.14;
     for (const x of [T.x + 0.2, T.x + T.w - 0.2]) { boite(0.28, hP - SOL, 0.28, x, (SOL + hP) / 2, T.y + 0.2, M.enduit, scene, true, 2); boite(0.36, 0.12, 0.36, x, SOL + 0.06, T.y + 0.2, M.pierre); }
     if (plan.etage) {
       // Balcon de l'étage : dalle au-dessus de la terrasse, garde-corps
       boite(T.w + 0.3, 0.22, T.h + 0.3, T.x + T.w / 2, hautRDC + 0.11, T.y + T.h / 2 - 0.15, M.blanc, groupeEtage);
       for (const [sx, sz, x, z] of [[T.w + 0.3, 0.08, T.x + T.w / 2, T.y - 0.25], [0.08, T.h + 0.3, T.x - 0.1, T.y + T.h / 2 - 0.15], [0.08, T.h + 0.3, T.x + T.w + 0.1, T.y + T.h / 2 - 0.15]]) boite(sx, 1.0, sz, x, hautRDC + 0.72, z, M.enduit, groupeEtage, true, 2);
     } else {
-    const inc = toiture === "terrasse" ? 0 : THREE.MathUtils.degToRad(12), prof = T.h + 0.5, yHaut = haut + (toiture === "terrasse" ? 0 : 0.12), yBas = yHaut - prof * Math.tan(inc);
     const auvent = new THREE.Mesh(new THREE.PlaneGeometry(T.w + 0.6, prof / Math.cos(inc)), toiture === "terrasse" ? M.blanc : M.tuiles);
     const uvA = auvent.geometry.attributes.uv; for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) * (T.w + 0.6), uvA.getY(i) * prof);
     for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) / 2.4, uvA.getY(i) / 4.48);
     auvent.position.set(T.x + T.w / 2, (yHaut + yBas) / 2, T.y + T.h - prof / 2); auvent.rotation.x = -Math.PI / 2 - inc; auvent.castShadow = true; auvent.receiveShadow = true; groupeToit.add(auvent);
-    boite(T.w + 0.6, 0.2, 0.05, T.x + T.w / 2, yBas - 0.08, T.y + T.h - prof, M.rive, groupeToit);
+    const sousFace = new THREE.Mesh(new THREE.PlaneGeometry(T.w + 0.5, prof / Math.cos(inc)), M.rive); sousFace.position.copy(auvent.position); sousFace.position.y -= 0.075; sousFace.rotation.copy(auvent.rotation); sousFace.rotateX(Math.PI); sousFace.receiveShadow = true; groupeToit.add(sousFace);
+    boite(T.w + 0.6, 0.15, 0.065, T.x + T.w / 2, yBas - 0.08, T.y + T.h - prof, M.rive, groupeToit);
     boite(T.w + 0.4, 0.14, 0.28, T.x + T.w / 2, hP + 0.07, T.y + 0.2, M.blanc, groupeToit);
     }
   }
@@ -543,27 +622,43 @@ export function afficher3D(conteneur, plan, options = {}) {
   palmes.setAttribute("position", new THREE.Float32BufferAttribute(feuilles, 3)); palmes.computeVertexNormals();
   const feuillePalme = M.feuille.clone(), feuillePalme2 = M.feuille2.clone(); feuillePalme.side = feuillePalme2.side = THREE.DoubleSide;
   const palmier = (x, z, t = 1) => {
-    const g = new THREE.Group(); let px = 0, py = 0;
-    for (let i = 0; i < 7; i++) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * t, 0.17 * t, 0.9 * t, 8), M.tronc); px += 0.06 * t; py += 0.88 * t; s.position.set(px, py - 0.44 * t, 0); s.rotation.z = -0.07; s.castShadow = true; g.add(s); }
-    const nombre = leger ? 8 : 12;
+    const g = new THREE.Group(), r = aleas(Math.abs(Math.round(x * 137 + z * 59)) + 713);
+    const px = 0.38 * t, py = 5.5 * t, tronc = new THREE.CylinderGeometry(0.11 * t, 0.2 * t, py, 10, 12), sommets = tronc.attributes.position;
+    for (let i = 0; i < sommets.count; i++) { const y = (sommets.getY(i) + py / 2) / py; sommets.setX(i, sommets.getX(i) + px * y * y); }
+    tronc.computeVertexNormals(); const fut = new THREE.Mesh(tronc, M.bois); fut.position.y = py / 2; fut.castShadow = true; g.add(fut);
+    const nombre = leger ? 9 : 15;
     for (let i = 0; i < nombre; i++) {
-      const pivot = new THREE.Group(), ang = (i / nombre) * Math.PI * 2 + (i % 2) * 0.15;
+      const pivot = new THREE.Group(), ang = (i / nombre) * Math.PI * 2 + r() * 0.32;
       const f = new THREE.Mesh(palmes, i % 2 ? feuillePalme : feuillePalme2);
-      f.scale.setScalar(t * (0.85 + (i % 3) * 0.09)); f.castShadow = true;
-      pivot.add(f); pivot.position.set(px, py, 0); pivot.rotation.set(0, ang, -0.25 - (i % 3) * 0.12); g.add(pivot);
+      f.scale.setScalar(t * (0.67 + r() * 0.4)); f.castShadow = true;
+      pivot.add(f); pivot.position.set(px, py - r() * 0.18, 0); pivot.rotation.set(r() * 0.12, ang, -0.1 + r() * 0.65); g.add(pivot);
     }
     g.position.set(x, 0, z); scene.add(g);
   };
+  // Feuilles individuelles regroupées sur le GPU : couronne ajourée et branches,
+  // plutôt que des sphères opaques. Même géométrie pour les massifs tropicaux.
+  const formeFeuille = new THREE.Shape(); formeFeuille.moveTo(0, 0); formeFeuille.quadraticCurveTo(-0.085, 0.11, 0, 0.32); formeFeuille.quadraticCurveTo(0.085, 0.11, 0, 0);
+  const geometrieFeuille = new THREE.ShapeGeometry(formeFeuille, 3);
+  const feuillage = M.feuille.clone(); feuillage.side = THREE.DoubleSide;
+  const feuillageClair = M.feuille2.clone(); feuillageClair.side = THREE.DoubleSide;
   const arbre = (x, z, t = 1) => {
-    boite(0.22 * t, 2.2 * t, 0.22 * t, x, 1.1 * t, z, M.tronc);
-    for (const [dx, dy, dz, r, m] of [[0, 2.8, 0, 1.4, M.feuille], [0.7, 2.4, 0.3, 0.95, M.feuille2], [-0.6, 2.5, -0.4, 1, M.feuille2], [0.1, 3.4, 0.2, 0.9, M.feuille]]) {
-      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(r * t, 1), m); f.position.set(x + dx * t, dy * t, z + dz * t); f.castShadow = true; scene.add(f);
+    const r = aleas(Math.abs(Math.round(x * 137 + z * 59)) + 213), transform = new THREE.Object3D();
+    const branche = (a, b, rayon) => { const longueur = a.distanceTo(b), o = new THREE.Mesh(new THREE.CylinderGeometry(rayon * 0.5, rayon, longueur, 7), M.tronc); o.position.copy(a).lerp(b, 0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); o.castShadow = true; scene.add(o); };
+    branche(new THREE.Vector3(x, 0, z), new THREE.Vector3(x + 0.09 * t, 2.7 * t, z), 0.12 * t);
+    for (let k = 0; k < 5; k++) { const a = k * 2.4; branche(new THREE.Vector3(x, 1.7 * t, z), new THREE.Vector3(x + Math.cos(a) * t, (2.8 + r() * 0.6) * t, z + Math.sin(a) * t), 0.045 * t); }
+    const n = leger ? 190 : 680;
+    for (const m of [feuillage, feuillageClair]) {
+      const couronne = new THREE.InstancedMesh(geometrieFeuille, m, n);
+      for (let i = 0; i < n; i++) { const a = r() * Math.PI * 2, v = r() * 2 - 1, rayon = Math.cbrt(r()) * 1.55, horizontal = Math.sqrt(1 - v * v) * rayon; transform.position.set(x + Math.cos(a) * horizontal * t, (3.0 + v * rayon * 0.83) * t, z + Math.sin(a) * horizontal * t); transform.rotation.set(r() * Math.PI, r() * Math.PI * 2, r() * Math.PI * 2); transform.scale.setScalar(t * (0.8 + r() * 0.6)); transform.updateMatrix(); couronne.setMatrixAt(i, transform.matrix); }
+      couronne.castShadow = !leger; couronne.receiveShadow = true; scene.add(couronne);
     }
   };
   const massif = (x, z, l, p = 0.7) => {
     if (l <= 0.4) return;
-    boite(l, 0.14, p, x, 0.07, z, M.pierre); const r = aleas(Math.abs(Math.round(x * 100 + z * 10)) + 99);
-    for (let i = 0; i < l * 3; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.18 + r() * 0.12, 8, 6), r() > 0.35 ? M.feuille2 : r() > 0.5 ? M.fleur : M.fleur2); b.position.set(x - l / 2 + 0.2 + r() * (l - 0.4), 0.25, z - p / 2 + 0.15 + r() * (p - 0.3)); b.castShadow = true; scene.add(b); }
+    boite(l, 0.09, p, x, 0.045, z, M.beton); boite(l - 0.1, 0.025, p - 0.1, x, 0.103, z, M.terre); const r = aleas(Math.abs(Math.round(x * 100 + z * 10)) + 99);
+    const n = Math.ceil(l * (leger ? 24 : 44)), plantes = new THREE.InstancedMesh(geometrieFeuille, feuillageClair, n), transform = new THREE.Object3D();
+    for (let i = 0; i < n; i++) { const plante = Math.floor(i / 11), a = (i % 11) * 2.4; transform.position.set(x - l / 2 + 0.18 + (plante + 0.4) / Math.ceil(n / 11) * (l - 0.36), 0.115, z + (r() - 0.5) * (p - 0.3)); transform.rotation.set(Math.sin(a) * 0.6, a, Math.cos(a) * 0.7); transform.scale.set(1.4 + r(), 1.3 + r() * 1.3, 1); transform.updateMatrix(); plantes.setMatrixAt(i, transform.matrix); }
+    plantes.castShadow = true; plantes.receiveShadow = true; scene.add(plantes);
   };
   if (compact) { palmier(-1.8, D * 0.3, 0.9); arbre(W + 1.6, D * 0.75, 0.85); }
   else {
@@ -574,13 +669,15 @@ export function afficher3D(conteneur, plan, options = {}) {
   }
 
   // ---------- Aménagement intérieur : mobilier détaillé, textiles, luminaires, plantes ----------
-  meubler(scene, M, boite, [[plan, SOL]], H, Boolean(options.film), leger);
-  if (plan.etage) meubler(groupeEtage, M, boite, [[plan.etage, hautRDC + 0.25]], H, Boolean(options.film), leger);
+  if (!exterieurSeul) {
+    meubler(scene, M, boite, [[plan, SOL]], H, Boolean(options.film), leger);
+    if (plan.etage) meubler(groupeEtage, M, boite, [[plan.etage, hautRDC + 0.25]], H, Boolean(options.film), leger);
+  }
   // Three r160 ne possède pas scene.environmentIntensity. Réduire la même
   // énergie ambiante sur chaque matière conserve les ombres sous les auvents.
   const matieresEclairees = new Set();
   scene.traverse((o) => { for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) if (m.isMeshStandardMaterial) matieresEclairees.add(m); });
-  for (const m of matieresEclairees) m.envMapIntensity = 0.25;
+  for (const m of matieresEclairees) m.envMapIntensity = m === M.verre ? 1.15 : m === M.enduit ? 0.23 : 0.36;
   const volumesRegroupes = options.fusion === false ? 0 : [scene, groupeToit, groupeEtage].reduce((s, groupe) => s + fusionnerVolumes(groupe), 0);
 
   // Les ombres ne changent qu'avec le toit ou le niveau ; la caméra seule ne
@@ -598,13 +695,48 @@ export function afficher3D(conteneur, plan, options = {}) {
     for (const g of geometries) g.dispose();
     for (const t of Object.values(tex)) textures.add(t);
     for (const m of Object.values(reliefs)) for (const t of Object.values(m)) textures.add(t);
+    for (const t of texturesExternes) textures.add(t);
     for (const t of textures) t.dispose();
     soleil.shadow.dispose(); environnement.dispose(); fondLeger?.dispose(); pmrem.dispose(); renderer.renderLists.dispose(); renderer.dispose(); renderer.forceContextLoss();
     renderer.domElement.remove();
   };
-  const montrerToit = (visible) => { if (groupeToit.visible !== visible || (visible && !groupeEtage.visible)) renderer.shadowMap.needsUpdate = true; groupeToit.visible = visible; if (visible) groupeEtage.visible = true; };
-  const niveau = (n = 0) => { const visible = n > 0 || !plan.etage; if (groupeEtage.visible !== visible) renderer.shadowMap.needsUpdate = true; groupeEtage.visible = visible; };
-  const mesures = () => ({ appels: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, volumesRegroupes, qualite: leger ? "legere" : "detaillee", environnement: leger ? 64 : 256, texture: leger ? 256 : 512, ombres: tailleOmbre, antialias: !leger && Boolean(!options.film || options.photo) });
+  let niveauCourant = 0, paletteCourante = plan.style || "classique-creme", lumiereCourante = "jour", cadrageCourant = "perspective", enPause = !options.auto;
+  const montrerToit = (visible) => { if (exterieurSeul && !visible) return false; if (groupeToit.visible !== visible || (visible && !groupeEtage.visible)) renderer.shadowMap.needsUpdate = true; groupeToit.visible = visible; if (visible) groupeEtage.visible = true; rafRendering(); return true; };
+  const niveau = (n = 0) => { if (exterieurSeul) return false; niveauCourant = plan.etage && Number(n) > 0 ? 1 : 0; const visible = niveauCourant > 0 || !plan.etage; if (groupeEtage.visible !== visible) renderer.shadowMap.needsUpdate = true; groupeEtage.visible = visible; rafRendering(); return niveauCourant; };
+  const mesures = () => ({ appels: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, volumesRegroupes, qualite: leger ? "legere" : "detaillee", environnement: leger ? 64 : 256, texture: leger ? 256 : 768, ombres: tailleOmbre, antialias: !leger && Boolean(!options.film || options.photo), pret: matieresPretes, assetsCharges: assetsCharges.length, assetsAbsents: [...assetsAbsents] });
+  const palette = (valeur) => {
+    const p = typeof valeur === "string" ? STYLES[valeur] : valeur;
+    if (!p || typeof p !== "object") return false;
+    if (p.enduit !== undefined) M.enduit.color.set(p.enduit);
+    if (p.accent !== undefined) M.alu.color.set(p.accent).multiplyScalar(0.48);
+    if (p.toiture !== undefined) M.tuiles.color.set(p.toiture);
+    if (p.sol !== undefined) M.dallage.color.set(p.sol);
+    paletteCourante = typeof valeur === "string" ? valeur : "personnalisee"; rafRendering(); return true;
+  };
+  const lumiere = (valeur = "jour") => {
+    const ambiances = { jour: [0xFFF1DB, 3, 0.72, 0.9], doree: [0xFFD4A0, 2.65, 0.62, 0.93], neutre: [0xF3F6FF, 2.7, 0.82, 0.91] }, p = ambiances[valeur];
+    if (!p) return false;
+    soleil.color.set(p[0]); soleil.intensity = p[1]; ambiance.intensity = p[2]; renderer.toneMappingExposure = p[3];
+    soleil.shadow.camera.updateProjectionMatrix(); renderer.shadowMap.needsUpdate = true; lumiereCourante = valeur; rafRendering(); return true;
+  };
+  const poserCamera = (position, cible, fov = 38) => {
+    if (detruit) return false;
+    reglerFov(fov); camera.position.copy(position); controles.target.copy(cible);
+    if (!options.film) { controles.autoRotate = false; controles.enableZoom = true; controles.minDistance = exterieurSeul ? Math.hypot(W, D) * 0.72 : 0.1; controles.maxDistance = quartier ? 220 : 120; controles.update(); }
+    camera.lookAt(cible); renderer.render(scene, camera); return true;
+  };
+  const cadrage = (nom = "perspective", n = niveauCourant) => {
+    if (exterieurSeul && !["facade", "perspective", "vue-ensemble", "terrasse"].includes(nom)) return false;
+    const voulu = nom === "ensemble" ? "vue-ensemble" : nom === "interieur" && Number(n) > 0 && plan.etage ? "interieur-etage" : nom;
+    const p = cadragesMaison(plan, { avant, arriere, gauche, droite }).find((v) => v.nom === voulu); if (!p) return false;
+    montrerToit(p.toit); if (!p.toit) niveau(p.niveau ?? n); const cam = p.cam.clone(), cible = p.cible.clone();
+    if (nom === "dessus" && Number(n) > 0 && plan.etage) { const delta = H + 0.25; cam.y += delta; cible.y += delta; niveau(1); }
+    cadrageCourant = nom; poserCamera(cam, cible, p.fov); rafRendering(); return true;
+  };
+  const capture = ({ type = "image/jpeg", qualite = 0.92 } = {}) => { if (detruit) return null; renderer.render(scene, camera); return renderer.domElement.toDataURL(type, THREE.MathUtils.clamp(qualite, 0.1, 1)); };
+  const etat = () => ({ cadrage: cadrageCourant, niveau: niveauCourant, toit: groupeToit.visible, palette: paletteCourante, lumiere: lumiereCourante, pause: enPause, exterieurSeul, pret: matieresPretes });
+  if (options.palette) palette(options.palette); if (options.lumiere) lumiere(options.lumiere);
+  const partage = { canvas: renderer.domElement, camera, SOL, haut, limites: { avant, arriere, gauche, droite }, pret, mesures, palette, lumiere, cadrage, capture, etat };
 
   // ---------- Mode tournage (atelier vidéo) : caméra pilotée image par image ----------
   if (options.film) {
@@ -612,18 +744,19 @@ export function afficher3D(conteneur, plan, options = {}) {
     camera.aspect = (options.largeur || 1920) / (options.hauteur || 1080); camera.updateProjectionMatrix();
     controles.dispose();
     return {
-      canvas: renderer.domElement, SOL, haut, limites: { avant, arriere, gauche, droite }, camera,
+      ...partage,
       toit: montrerToit, niveau, mesures, detruire: nettoyer,
-      image(position, cible, fov = 38) { if (detruit) return; camera.fov = fov; camera.updateProjectionMatrix(); camera.position.copy(position); camera.lookAt(cible); renderer.render(scene, camera); },
+      pause(value = true) { enPause = Boolean(value); },
+      image: poserCamera,
     };
   }
 
   // ---------- Caméra et rendu ----------
   const centre =new THREE.Vector3(W / 2, 1.6, D / 2 - (T ? T.h / 3 : 0));
   const recul = (options.recul || (compact ? 1 : 1.45)) * Math.max(W, D);
-  const vueEnsemble = () => { camera.position.set(W / 2 - recul * 0.95, recul * 0.55 + 2, -recul * 1.15); controles.target.copy(centre); controles.minDistance = 4; controles.maxDistance = quartier ? 220 : 120; controles.update(); };
+  const vueEnsemble = () => { camera.position.set(W / 2 - recul * 0.95, recul * 0.55 + 2, -recul * 1.15); controles.target.copy(centre); controles.minDistance = exterieurSeul ? Math.hypot(W, D) * 0.72 : 4; controles.maxDistance = quartier ? 220 : 120; controles.update(); };
   vueEnsemble();
-  const taille = () => { const w = conteneur.clientWidth || 600, h = conteneur.clientHeight || 400; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  const taille = () => { const w = conteneur.clientWidth || 600, h = conteneur.clientHeight || 400; renderer.setSize(w, h, false); camera.aspect = w / h; if (fovCadre !== null) reglerFov(fovCadre); else camera.updateProjectionMatrix(); };
   taille();
   let actif = true, visible = true, iPiece = -1, frame = 0, sale = true, enRendu = false, rotationPermise = Boolean(options.auto);
   const dessiner = () => {
@@ -635,27 +768,33 @@ export function afficher3D(conteneur, plan, options = {}) {
   const invalider = () => { sale = true; if (!enRendu && !frame && actif && visible && !document.hidden) frame = requestAnimationFrame(dessiner); };
   rafRendering = invalider;
   const visibilite = () => { if (frame) cancelAnimationFrame(frame); frame = 0; invalider(); };
-  const mouvement = () => { controles.autoRotate = rotationPermise && !mouvementReduit?.matches; invalider(); };
+  const mouvement = () => { controles.autoRotate = rotationPermise && !enPause && !mouvementReduit?.matches; invalider(); };
   const intersection = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([entree]) => { visible = entree.isIntersecting; visibilite(); }, { rootMargin: "100px" });
   intersection?.observe(conteneur);
   document.addEventListener("visibilitychange", visibilite); mouvementReduit?.addEventListener("change", mouvement);
   controles.addEventListener("change", invalider); controles.addEventListener("start", invalider);
   // Le redimensionnement suit aussi les panneaux masqués puis réouverts.
   const dimensions = new ResizeObserver(() => { taille(); invalider(); }); dimensions.observe(conteneur);
+  if (!compact && !options.auto) cadrage(options.cadrage || "perspective");
   invalider();
 
   return {
-    toit(visible) { montrerToit(visible); invalider(); },
-    mesures,
-    vueEnsemble() { montrerToit(true); camera.fov = 38; camera.updateProjectionMatrix(); rotationPermise = Boolean(options.auto); mouvement(); if (options.auto) controles.enableZoom = false; vueEnsemble(); invalider(); },
+    ...partage,
+    toit(visible) { const r = montrerToit(visible); invalider(); return r; },
+    niveau(n = 0) { if (exterieurSeul) return false; montrerToit(false); return cadrage(cadrageCourant === "dessus" ? "dessus" : "interieur", n); },
+    cadrage(nom, n = niveauCourant) { rotationPermise = false; enPause = true; return cadrage(nom, n); },
+    image(position, cible, fov = 38) { rotationPermise = false; enPause = true; return poserCamera(position, cible, fov); },
+    pause(valeur = true) { enPause = Boolean(valeur); rotationPermise = !enPause; mouvement(); return enPause; },
+    vueEnsemble() { montrerToit(true); reglerFov(38); cadrageCourant = "vue-ensemble"; rotationPermise = Boolean(options.auto); enPause = !options.auto; mouvement(); if (options.auto) controles.enableZoom = false; vueEnsemble(); invalider(); },
     // Visite : chaque appel passe à la pièce suivante (séjour, cuisine, chambres…) et renvoie son nom
     visite() {
+      if (exterieurSeul) return "Vue extérieure";
       const ordre = ["salon", "cuisine", "chambre", "detente", "bureau", "sdb"], liste = [[plan, SOL, 0], ...(plan.etage ? [[plan.etage, hautRDC + 0.25, 1]] : [])].flatMap(([pl, base, etage]) => pl.pieces.filter((q) => ordre.includes(q.type)).sort((a, c) => ordre.indexOf(a.type) - ordre.indexOf(c.type)).map((q) => ({ ...q, base, etage })));
       if (!liste.length) return "Vue d'ensemble";
       iPiece = (iPiece + 1) % liste.length; const s = liste[iPiece];
       // Vue « maison de poupée » : toit retiré, caméra plongeante au-dessus de la pièce (on voit tout le mobilier)
-      groupeToit.visible = false; niveau(s.etage); rotationPermise = false; controles.autoRotate = false; controles.enableZoom = true;
-      camera.fov = 50; camera.updateProjectionMatrix();
+      montrerToit(false); niveau(s.etage); rotationPermise = false; enPause = true; controles.autoRotate = false; controles.enableZoom = true; cadrageCourant = "visite";
+      reglerFov(50);
       const cxp = s.x + s.w / 2, czp = s.y + s.h / 2, t = Math.max(s.w, s.h);
       camera.position.set(cxp - t * 0.18, s.base + H + 1.2 + t * 0.95, czp + t * 0.42); controles.target.set(cxp, s.base + 0.3, czp - t * 0.05);
       controles.minDistance = 0.1; controles.maxDistance = 30; controles.update();

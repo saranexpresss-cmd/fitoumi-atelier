@@ -1,0 +1,104 @@
+{
+  "date": "2026-11-17",
+  "license": "https://polyhaven.com/license",
+  "assets": [
+    {
+      "file": "plastered_wall_04_nor_gl_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/plastered_wall_04/plastered_wall_04_nor_gl_1k.jpg",
+      "page": "https://polyhaven.com/a/plastered_wall_04",
+      "license": "CC0-1.0",
+      "bytes": 427268,
+      "md5": "f18e649235bb688732fb0ef1d61a5286",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 20954,
+      "localSha256": "1f6e1671c2cc96c71fceeb9377eb971e3a38d7dbf0763652e7f3bb47a96889e2"
+    },
+    {
+      "file": "plastered_wall_04_rough_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/plastered_wall_04/plastered_wall_04_rough_1k.jpg",
+      "page": "https://polyhaven.com/a/plastered_wall_04",
+      "license": "CC0-1.0",
+      "bytes": 243061,
+      "md5": "66c89044921accf705665e4ea9ba1d66",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 13588,
+      "localSha256": "a9c66936d9b1c377adec13e416626ff16331c1056671d6fdf724ab9765b09b50"
+    },
+    {
+      "file": "grass_ground_diff_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_diff_1k.jpg",
+      "page": "https://polyhaven.com/a/grass_ground",
+      "license": "CC0-1.0",
+      "bytes": 876584,
+      "md5": "299047258586c762735b7284d3c662c3",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 128625,
+      "localSha256": "268cae4d4f378c72a3cbf3ea02aa0d1e0621925a3d4a397fbef1b0feb8f90fa6"
+    },
+    {
+      "file": "patio_tiles_diff_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/patio_tiles/patio_tiles_diff_1k.jpg",
+      "page": "https://polyhaven.com/a/patio_tiles",
+      "license": "CC0-1.0",
+      "bytes": 700816,
+      "md5": "221dd43ae606e52fc142e04c4683b423",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 96540,
+      "localSha256": "2d3baa336084e40988bf9632b1ef2502af50060ce0f0dc75cbcd9ff700e72e21"
+    },
+    {
+      "file": "patio_tiles_nor_gl_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/patio_tiles/patio_tiles_nor_gl_1k.jpg",
+      "page": "https://polyhaven.com/a/patio_tiles",
+      "license": "CC0-1.0",
+      "bytes": 302459,
+      "md5": "27264b26d14bd391843fbbf43b385a0d",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 19928,
+      "localSha256": "67394af1f4f37f112703ffd17cfdd90461e52b4de8c8cfda3f05d36099b16759"
+    },
+    {
+      "file": "patio_tiles_rough_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/patio_tiles/patio_tiles_rough_1k.jpg",
+      "page": "https://polyhaven.com/a/patio_tiles",
+      "license": "CC0-1.0",
+      "bytes": 379224,
+      "md5": "18f47955ef2e7f7e72c2cff3fe11a5bb",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 28434,
+      "localSha256": "2956d55aced88a8695758c537a8724d106c03e83c013bccb7faab51822b30c64"
+    },
+    {
+      "file": "clay_roof_tiles_02_diff_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/clay_roof_tiles_02/clay_roof_tiles_02_diff_1k.jpg",
+      "page": "https://polyhaven.com/a/clay_roof_tiles_02",
+      "license": "CC0-1.0",
+      "bytes": 903929,
+      "md5": "43c45fa3ac4c68ffb28aa813cec32608",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 152646,
+      "localSha256": "d02434c7f0c3004e485d2e6b973dee1d634fb7da99f4f1c76085a4e4d2698ef7"
+    },
+    {
+      "file": "clay_roof_tiles_02_nor_gl_1k.jpg",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/clay_roof_tiles_02/clay_roof_tiles_02_nor_gl_1k.jpg",
+      "page": "https://polyhaven.com/a/clay_roof_tiles_02",
+      "license": "CC0-1.0",
+      "bytes": 990101,
+      "md5": "9e24ddc6fbf048291f8e24bfb1f16e6d",
+      "transformation": "Resized to 768x768, JPEG quality 86; source checksum preserved above.",
+      "localBytes": 167159,
+      "localSha256": "fe5c4433018f6ecfb17ea19b4b1baf5cca8f51f096becbb085f0f92608df1306"
+    },
+    {
+      "file": "kloppenheim_06_puresky_1k.hdr",
+      "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloppenheim_06_puresky_1k.hdr",
+      "page": "https://polyhaven.com/a/kloppenheim_06_puresky",
+      "license": "CC0-1.0",
+      "bytes": 1173154,
+      "md5": "995d68b1656f26452572645c0ffe898b",
+      "localBytes": 1173154,
+      "localSha256": "206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34"
+    }
+  ]
+}

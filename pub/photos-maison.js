@@ -6,11 +6,13 @@ const L = 1600, H = 900;
 const params = new URLSearchParams(location.search);
 const S = await (await fetch(params.get("scenario"))).json();
 const plan = S.plan;
-const vue = afficher3D(document.getElementById("scene"), plan, { film: true, photo: true, largeur: L, hauteur: H });
+const voulues = params.get("prises")?.split(",");
+const exterieurSeul = Boolean(voulues?.length && voulues.every((nom) => ["vue-ensemble", "facade", "perspective", "terrasse"].includes(nom)));
+const vue = afficher3D(document.getElementById("scene"), plan, { film: true, photo: true, largeur: L, hauteur: H, exterieurSeul });
+await vue.pret;
 const PRISES = cadragesMaison(plan, vue.limites);
 window.photos = [];
 // ?prises=vue-ensemble,facade : seulement ces vues (aperçu avant achat : jamais l'intérieur)
-const voulues = params.get("prises")?.split(",");
 for (const p of PRISES.filter((x) => !voulues || voulues.includes(x.nom))) {
   vue.toit(p.toit);
   if (p.niveau !== undefined) vue.niveau(p.niveau);

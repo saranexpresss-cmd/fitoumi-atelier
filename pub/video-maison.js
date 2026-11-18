@@ -12,9 +12,10 @@ await Promise.all(["800 60px Jakarta", "600 30px Jakarta", "400 26px Jakarta"].m
 
 const plan = S.plan, W = plan.largeur, D = plan.profondeur, T = plan.terrasse, R = Math.max(W, D);
 const vue = afficher3D(document.getElementById("scene"), plan, { film: true, largeur: L, hauteur: H });
+await vue.pret;
 const LIMITE = Number(params.get("limite")) || Infinity; // essais : nombre d'images maximal
 const V = (x, y, z) => new THREE.Vector3(x, y, z), C = V(W / 2, vue.SOL + (plan.etage ? 3 : 1.6), D / 2), SOL = vue.SOL;
-const cadrages = cadragesMaison(plan, vue.limites), facade = cadrages.find((p) => p.nom === "facade"), terrasse = cadrages.find((p) => p.nom === "terrasse");
+const cadrages = cadragesMaison(plan, vue.limites), facade = cadrages.find((p) => p.nom === "facade"), perspective = cadrages.find((p) => p.nom === "perspective"), terrasse = cadrages.find((p) => p.nom === "terrasse");
 const salon = plan.pieces.find((q) => q.type === "salon") || plan.pieces[0];
 const chambres = plan.pieces.filter((q) => q.type === "chambre").length;
 const doux = (t) => t * t * (3 - 2 * t), lerp = (a, b, t) => a.clone().lerp(b, t);
@@ -24,7 +25,7 @@ const baseEtage = SOL + (plan.hauteur || 3) + 0.25, pieceR = Math.max(salon.w, s
 
 // Plans du film : durée, caméra, cible, toit visible, légende
 const PLANS = [
-  { d: 7, cam: (t) => orbite(deg(-60 + 70 * t), R * 1.75, R * 0.8 + 4), cible: () => C, legende: null },
+  { d: 7, cam: (t) => lerp(perspective.cam, facade.cam, t * 0.45), cible: (t) => lerp(perspective.cible, facade.cible, t * 0.45), fov: 58, legende: null },
   { d: 6, cam: (t) => lerp(facade.cam, terrasse.cam, t), cible: (t) => lerp(facade.cible, terrasse.cible, t), fov: 60, legende: T ? `Terrasse couverte · ${fr(T.surface)} m²` : "L'entrée" },
   { d: 6, toit: false, niveau: 0, cam: (t) => V(salon.x + salon.w * (0.25 + 0.3 * t), SOL + (plan.hauteur || 3) + pieceR * 0.7, salon.y + salon.h * (1.1 - 0.25 * t)), cible: () => V(salon.x + salon.w / 2, SOL + 0.3, salon.y + salon.h / 2), fov: 50, legende: `${salon.nom} · ${fr(salon.surface)} m²` },
   { d: 6, toit: false, niveau: plan.etage ? 1 : 0, cam: (t) => orbite(deg(-40 + 70 * t), R * 0.55, (plan.etage ? baseEtage : SOL) + R * 1.35 + 3), cible: () => V(W / 2, plan.etage ? baseEtage : SOL, D / 2), legende: `${plan.etage ? "L'étage · " : ""}${chambres} chambre${chambres > 1 ? "s" : ""} · ${fr(plan.habitable)} m² de pièces` },
